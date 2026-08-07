@@ -1,0 +1,216 @@
+using MotionInput.Core.Input;
+using MotionInput.Core.Models;
+using MotionInput.Core.Motion;
+using MotionInput.Core.Output;
+
+namespace MotionInput.Core.Engine;
+
+/// <summary>
+/// Top-level orchestrator: polls the controller, resolves a numpad direction each tick, feeds a
+/// <see cref="MotionBuffer"/>/<see cref="MotionMatcher"/> pair, mirrors the direction onto the
+/// virtual pad's d-pad, and fires configured outputs when a motion completes and an attack button
+/// lands inside its attack window (or immediately, for a bare attack press).
+/// </summary>
+public sealed class MotionInputEngine : IDisposable
+{
+    private readonly Profile _profile;
+    private readonly IControllerSource _controllerSource;
+    private readonly IVirtualGamepad _gamepad;
+    private readonly OutputDispatcher _dispatcher;
+    private readonly MotionBuffer _buffer;
+    private readonly MotionMatcher _matcher;
+    private readonly HashSet<string> _previousDigital = new();
+
+    private Thread? _thread;
+    private CancellationTokenSource? _cts;
+    private PendingMotion? _pending;
+
+    public MotionInputEngine(Profile profile, IControllerSource controllerSource, IVirtualGamepad gamepad)
+    {
+        _profile = profile;
+        _controllerSource = controllerSource;
+        _gamepad = gamepad;
+        _dispatcher = new OutputDispatcher(gamepad);
+        _buffer = new MotionBuffer();
+        _matcher = new MotionMatcher(profile.Motions, profile.Leniency);
+    }
+
+    /// <summary>Raised on every poll with the raw snapshot, for UI display.</summary>
+    public event Action<ControllerSnapshot>? SnapshotPolled;
+
+    /// <summary>Raised whenever the resolved numpad direction changes.</summary>
+    public event Action<int>? DirectionChanged;
+
+    /// <summary>Raised the instant a motion's sequence completes, whether or not an attack follows.</summary>
+    public event Action<MotionMatchResult>? MotionDetected;
+
+    /// <summary>Raised whenever outputs are actually fired: motion name (or null for a bare attack) and the attack role (or null for a motion with no attack).</summary>
+    public event Action<string?, string?>? OutputFired;
+
+    public bool IsRunning => _thread is { IsAlive: true };
+
+    public void Start()
+    {
+        if (IsRunning) return;
+
+        _gamepad.Connect();
+        _cts = new CancellationTokenSource();
+        _thread = new Thread(() => Loop(_cts.Token)) { IsBackground = true, Name = "MotionInputEngine" };
+        _thread.Start();
+    }
+
+    public void Stop()
+    {
+        _cts?.Cancel();
+        _thread?.Join(TimeSpan.FromSeconds(1));
+        _thread = null;
+        _gamepad.ResetAll();
+        _buffer.Clear();
+        _matcher.Reset();
+        _pending = null;
+        _previousDigital.Clear();
+    }
+
+    private void Loop(CancellationToken ct)
+    {
+        var pollRate = Math.Clamp(_profile.ControllerInput.PollRateHz, 30, 1000);
+        var interval = TimeSpan.FromSeconds(1.0 / pollRate);
+        var next = DateTime.UtcNow;
+
+        while (!ct.IsCancellationRequested)
+        {
+            Tick();
+
+            next += interval;
+            var delay = next - DateTime.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                Thread.Sleep(delay);
+            }
+            else
+            {
+                next = DateTime.UtcNow;
+            }
+        }
+    }
+
+    private void Tick()
+    {
+        var snapshot = _controllerSource.Poll();
+        var now = snapshot.Timestamp;
+        SnapshotPolled?.Invoke(snapshot);
+
+        var direction = DirectionMapper.Map(snapshot, _profile.ControllerInput);
+        MirrorDpad(direction);
+
+        if (_buffer.Update(direction, now))
+        {
+            DirectionChanged?.Invoke(direction);
+
+            var match = _matcher.TryMatch(_buffer, now);
+            if (match is not null)
+            {
+                _pending = new PendingMotion(match, now + TimeSpan.FromMilliseconds(_profile.Leniency.AttackWindowMs));
+                MotionDetected?.Invoke(match);
+            }
+        }
+
+        foreach (var (role, physicalIds) in _profile.AttackBindings)
+        {
+            var wasHeld = physicalIds.Any(id => _previousDigital.Contains(id));
+            var isHeld = physicalIds.Any(id => snapshot.Digital.Contains(id));
+            if (isHeld && !wasHeld)
+            {
+                HandleAttackPress(role, now);
+            }
+        }
+
+        foreach (var (physicalId, tokens) in _profile.KeyOutputs)
+        {
+            var was = _previousDigital.Contains(physicalId);
+            var isHeld = snapshot.Digital.Contains(physicalId);
+            if (isHeld && !was)
+            {
+                Fire(tokens, new OutputContext());
+            }
+        }
+
+        _previousDigital.Clear();
+        foreach (var id in snapshot.Digital)
+        {
+            _previousDigital.Add(id);
+        }
+
+        if (_pending is { } pending && now > pending.ExpiresAt)
+        {
+            _pending = null;
+        }
+    }
+
+    private void HandleAttackPress(string role, DateTime now)
+    {
+        if (_pending is { } pending &&
+            now <= pending.ExpiresAt &&
+            _profile.MotionAttackOutputs.TryGetValue(pending.Match.MotionName, out var perRole) &&
+            perRole.TryGetValue(role, out var comboTokens))
+        {
+            var context = new OutputContext
+            {
+                StartDirection = pending.Match.StartDirection,
+                FinalDirection = pending.Match.FinalDirection,
+                AttackControllerButton = ResolveAttackButton(role),
+            };
+            Fire(comboTokens, context);
+            OutputFired?.Invoke(pending.Match.MotionName, role);
+            _pending = null;
+            return;
+        }
+
+        if (_profile.AttackOutputs.TryGetValue(role, out var plainTokens))
+        {
+            Fire(plainTokens, new OutputContext { AttackControllerButton = ResolveAttackButton(role) });
+            OutputFired?.Invoke(null, role);
+        }
+    }
+
+    private string? ResolveAttackButton(string role)
+    {
+        if (_profile.AttackOutputs.TryGetValue(role, out var tokens))
+        {
+            foreach (var token in tokens)
+            {
+                if (token.StartsWith("controller:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return token["controller:".Length..].ToLowerInvariant();
+                }
+            }
+        }
+        return null;
+    }
+
+    private void Fire(List<string> tokens, OutputContext context)
+    {
+        var resolved = OutputResolver.Resolve(tokens, context);
+        _ = _dispatcher.FireAsync(resolved, holdMs: 50);
+    }
+
+    private void MirrorDpad(int direction)
+    {
+        foreach (var button in new[] { "dpad_up", "dpad_down", "dpad_left", "dpad_right" })
+        {
+            _gamepad.SetButton(button, false);
+        }
+        foreach (var button in OutputResolver.DirectionButtons(direction))
+        {
+            _gamepad.SetButton(button, true);
+        }
+    }
+
+    public void Dispose()
+    {
+        Stop();
+        _cts?.Dispose();
+    }
+
+    private sealed record PendingMotion(MotionMatchResult Match, DateTime ExpiresAt);
+}

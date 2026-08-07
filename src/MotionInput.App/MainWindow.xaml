@@ -1,0 +1,185 @@
+<Window x:Class="MotionInput.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:MotionInput.App"
+        mc:Ignorable="d"
+        Title="236KO — Motion Input" Height="760" Width="1150"
+        Closing="Window_Closing">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="10" Background="#FF202020">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Controller:" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="White"/>
+                <ComboBox x:Name="ControllerCombo" Width="240" DisplayMemberPath="DisplayName"/>
+                <Button x:Name="RefreshControllersButton" Content="Refresh" Margin="6,0,0,0" Padding="8,2" Click="RefreshControllersButton_Click"/>
+
+                <TextBlock Text="Profile:" VerticalAlignment="Center" Margin="20,0,6,0" Foreground="White"/>
+                <ComboBox x:Name="ProfileCombo" Width="160" IsEditable="True" SelectionChanged="ProfileCombo_SelectionChanged"/>
+                <Button x:Name="NewProfileButton" Content="New" Margin="6,0,0,0" Padding="8,2" Click="NewProfileButton_Click"/>
+                <Button x:Name="SaveProfileButton" Content="Save" Margin="4,0,0,0" Padding="8,2" Click="SaveProfileButton_Click"/>
+                <Button x:Name="DeleteProfileButton" Content="Delete" Margin="4,0,0,0" Padding="8,2" Click="DeleteProfileButton_Click"/>
+
+                <Button x:Name="StartStopButton" Content="Start" Margin="24,0,0,0" Padding="16,2" Click="StartStopButton_Click"/>
+                <Ellipse x:Name="EngineStatusDot" Width="12" Height="12" Fill="Gray" Margin="12,0,4,0"/>
+                <TextBlock x:Name="EngineStatusText" Text="Stopped" VerticalAlignment="Center" Foreground="White"/>
+            </StackPanel>
+        </Border>
+
+        <TabControl Grid.Row="1" Margin="6">
+            <TabItem Header="Monitor">
+                <Grid Margin="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="6">
+                        <TextBlock Text="Direction" FontSize="14" FontWeight="Bold"/>
+                        <Border BorderBrush="Gray" BorderThickness="1" Margin="0,6,0,10" Padding="16" HorizontalAlignment="Center">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock x:Name="DirectionText" Text="5" FontSize="56" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="DirectionArrowText" Text="neutral" FontSize="14" HorizontalAlignment="Center" Foreground="Gray"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Held Inputs" FontWeight="Bold"/>
+                        <TextBlock x:Name="HeldInputsText" Text="—" TextWrapping="Wrap" Margin="0,4,0,12"/>
+
+                        <TextBlock Text="Pending Motion / Attack Window" FontWeight="Bold"/>
+                        <TextBlock x:Name="PendingMotionText" Text="—" Margin="0,4,0,12" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="Last Output" FontWeight="Bold"/>
+                        <TextBlock x:Name="LastOutputText" Text="—" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <DockPanel Grid.Column="1" Margin="6">
+                        <TextBlock DockPanel.Dock="Top" Text="Recognition Log" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <ListBox x:Name="MotionLogList" FontFamily="Consolas" FontSize="12"/>
+                    </DockPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Profile Editor">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+
+                        <TextBlock Text="Controller Input" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <CheckBox x:Name="UseDpadCheck" Content="D-Pad" Margin="0,0,16,0"/>
+                            <CheckBox x:Name="UseLeftStickCheck" Content="Left Stick" Margin="0,0,16,0"/>
+                            <CheckBox x:Name="UseRightStickCheck" Content="Right Stick" Margin="0,0,16,0"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="Stick deadzone:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox x:Name="StickDeadzoneBox" Width="60"/>
+                            <TextBlock Text="Trigger threshold:" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBox x:Name="TriggerThresholdBox" Width="60"/>
+                            <TextBlock Text="Poll rate (Hz):" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBox x:Name="PollRateBox" Width="60"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Buffer / Leniency" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="Max sequence (ms):" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox x:Name="MaxSequenceMsBox" Width="60"/>
+                            <TextBlock Text="Max gap (ms):" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBox x:Name="MaxGapMsBox" Width="60"/>
+                            <TextBlock Text="Attack window (ms):" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBox x:Name="AttackWindowMsBox" Width="60"/>
+                            <TextBlock Text="Motion cooldown (ms):" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBox x:Name="MotionCooldownMsBox" Width="60"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Motions (priority order — top matches first)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="MotionsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="180" Margin="0,0,0,16">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="140"/>
+                                <DataGridTextColumn Header="Sequence (e.g. 2,3,6)" Binding="{Binding SequenceText}" Width="160"/>
+                                <DataGridCheckBoxColumn Header="Diagonal skip" Binding="{Binding AllowDiagonalSkip}" Width="90"/>
+                                <DataGridTextColumn Header="Max seq ms (blank=default)" Binding="{Binding MaxSequenceMsText}" Width="150"/>
+                                <DataGridTextColumn Header="Max gap ms (blank=default)" Binding="{Binding MaxGapMsText}" Width="150"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="Attack Bindings (role -&gt; physical input ids, comma separated)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="AttackBindingsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="120" Margin="0,0,0,16">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="140"/>
+                                <DataGridTextColumn Header="Physical input ids" Binding="{Binding ValuesText}" Width="300"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="Motion + Attack Outputs (fires when the attack lands inside the motion's attack window)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="MotionOutputsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="200" Margin="0,0,0,16">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Motion" Binding="{Binding Motion}" Width="120"/>
+                                <DataGridTextColumn Header="Attack role" Binding="{Binding Role}" Width="100"/>
+                                <DataGridTextColumn Header="Output tokens (comma separated)" Binding="{Binding TokensText}" Width="380"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="Attack Outputs (fires on a bare attack press, no motion)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="AttackOutputsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="120" Margin="0,0,0,16">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="140"/>
+                                <DataGridTextColumn Header="Output tokens (comma separated)" Binding="{Binding ValuesText}" Width="360"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="Key Outputs (direct passthrough/remap of any other physical input)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <DataGrid x:Name="KeyOutputsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="150" Margin="0,0,0,16">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Physical input id" Binding="{Binding Role}" Width="160"/>
+                                <DataGridTextColumn Header="Output tokens (comma separated)" Binding="{Binding ValuesText}" Width="340"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="HidHide">
+                <StackPanel Margin="14">
+                    <TextBlock x:Name="HidHideStatusText" Text="HidHide status: unknown" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <CheckBox x:Name="CloakingEnabledCheck" Content="Cloaking enabled (physical controller hidden from every app except the whitelist below)" Margin="0,0,0,14"/>
+
+                    <TextBlock Text="Target application (the game/launcher exe that should NOT see the real controller)" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBox x:Name="ApplicationPathBox" Width="500"/>
+                        <Button x:Name="BrowseApplicationButton" Content="Browse…" Margin="6,0,0,0" Padding="8,2" Click="BrowseApplicationButton_Click"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Button x:Name="WhitelistSelfButton" Content="Whitelist this app (so it can still read the real pad)" Padding="8,2" Click="WhitelistSelfButton_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Devices to cloak" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <Button x:Name="RefreshHidHideDevicesButton" Content="Refresh device list" Padding="8,2" Click="RefreshHidHideDevicesButton_Click"/>
+                        <Button x:Name="ApplyHidHideButton" Content="Apply" Margin="8,0,0,0" Padding="8,2" Click="ApplyHidHideButton_Click"/>
+                    </StackPanel>
+                    <DataGrid x:Name="HidHideDevicesGrid" AutoGenerateColumns="False" CanUserAddRows="False" Height="240">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="Cloak" Binding="{Binding IsCloaked}" Width="60"/>
+                            <DataGridTextColumn Header="Device" Binding="{Binding FriendlyName}" Width="360" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Instance Id" Binding="{Binding InstanceId}" Width="420" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <StatusBar Grid.Row="2">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="Ready"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>

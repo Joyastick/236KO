@@ -1,0 +1,13 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+
+## Rider / VS
+.vs/
+.idea/
+*.DotSettings.user
+
+## Profiles written at runtime (ships defaults via code, not via the repo)
+**/bin/**/Profiles/
