@@ -45,6 +45,46 @@ public class MotionInputEngineTests
         }
     }
 
+    // Regression test: after a motion+attack combo macro fires (e.g. qcf+M -> neutral + A), the
+    // combo used to be a fully one-shot ~50ms pulse. If the player kept M held down, A should stay
+    // held on the virtual pad for as long as M is, same as a plain (non-combo) attack would.
+
+    [Fact]
+    public void Holding_the_attack_after_a_motion_combo_fires_keeps_the_combo_button_held()
+    {
+        var profile = MakeProfile();
+        profile.Motions.Add(new() { Name = "qcf", Sequence = new() { 2, 3, 6 } });
+        profile.MotionAttackOutputs["qcf"] = new()
+        {
+            ["light"] = new() { "controller_direction:5", "$attack" },
+        };
+
+        var source = new FakeControllerSource();
+        var gamepad = new FakeVirtualGamepad();
+        using var engine = new MotionInputEngine(profile, source, gamepad);
+
+        engine.Start();
+        try
+        {
+            source.SetHeld("dpad_down", "dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_right", "x"); // qcf completes, attack lands inside the window
+
+            Thread.Sleep(200); // well past the old 50ms macro pulse duration
+            Assert.True(gamepad.IsHeld("x"));
+
+            source.SetHeld(); // release
+            Thread.Sleep(100);
+            Assert.False(gamepad.IsHeld("x"));
+        }
+        finally
+        {
+            engine.Stop();
+        }
+    }
+
     [Fact]
     public void Holding_a_bare_attack_button_keeps_the_virtual_button_held()
     {

@@ -104,6 +104,10 @@ stays held on the virtual pad, same as a real controller would. `MotionAttackOut
 different on purpose — they're a brief macro (default 50ms press) fired once when the attack lands
 inside the motion's attack window, not a literal hold, since the combo's own tokens (e.g. a specific
 d-pad direction) don't necessarily match whatever the player is physically holding at that instant.
+The one exception is the combo's `$attack` token specifically: whichever button that resolves to
+stays held on the virtual pad for as long as the physical attack button is, exactly like a plain
+`AttackOutputs` press would — only the rest of the combo (e.g. a forced neutral direction) is a
+one-shot pulse.
 
 Output tokens (used in `MotionAttackOutputs`, `AttackOutputs`, `KeyOutputs`):
 

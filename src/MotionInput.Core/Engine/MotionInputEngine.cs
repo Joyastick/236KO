@@ -27,9 +27,15 @@ public sealed class MotionInputEngine : IDisposable
     private readonly HashSet<string> _heldMirroredButtons = new();
     private readonly HashSet<string> _heldMirroredKeys = new();
 
-    // Attack roles whose current hold was already consumed by a motion+attack combo macro, so they
-    // don't *also* get continuously mirrored as a plain attack for the rest of that same hold.
+    // Attack roles whose current hold was already consumed by a motion+attack combo macro, so the
+    // combo's own direction/other tokens don't also get pulsed again by the plain-attack path for
+    // the rest of that same hold.
     private readonly HashSet<string> _comboConsumedRoles = new();
+
+    // The controller button a combo's "$attack" token resolved to, per role, kept held via the
+    // continuous mirror for as long as the physical button stays down — the rest of the combo
+    // (e.g. a forced neutral direction) is still just a brief one-shot pulse.
+    private readonly Dictionary<string, string> _comboSustainedButtons = new();
 
     private Thread? _thread;
     private CancellationTokenSource? _cts;
@@ -80,6 +86,7 @@ public sealed class MotionInputEngine : IDisposable
         _heldMirroredButtons.Clear();
         _heldMirroredKeys.Clear();
         _comboConsumedRoles.Clear();
+        _comboSustainedButtons.Clear();
 
         _gamepad.ResetAll();
         _buffer.Clear();
@@ -148,12 +155,21 @@ public sealed class MotionInputEngine : IDisposable
             if (!isHeld)
             {
                 _comboConsumedRoles.Remove(role);
+                _comboSustainedButtons.Remove(role);
                 continue;
             }
 
-            // A press already spent on a motion+attack combo macro doesn't also hold the plain
-            // attack output for the rest of that same hold — only a fresh press/release does.
-            if (_comboConsumedRoles.Contains(role)) continue;
+            // A press already spent on a motion+attack combo macro doesn't also re-pulse the combo's
+            // direction/other tokens for the rest of that same hold, but the combo's own attack
+            // button (its "$attack" token) still stays held for as long as the button is down.
+            if (_comboConsumedRoles.Contains(role))
+            {
+                if (_comboSustainedButtons.TryGetValue(role, out var sustainedButton))
+                {
+                    desiredButtons.Add(sustainedButton);
+                }
+                continue;
+            }
 
             if (_profile.AttackOutputs.TryGetValue(role, out var attackTokens))
             {
@@ -202,7 +218,21 @@ public sealed class MotionInputEngine : IDisposable
                 FinalDirection = pending.Match.FinalDirection,
                 AttackControllerButton = ResolveAttackButton(role),
             };
-            Fire(comboTokens, context);
+
+            // The "$attack" token is held for as long as the physical button is (via the continuous
+            // mirror in Tick), not pulsed with the rest of the combo — otherwise the dispatcher's
+            // release-after-holdMs would fight the mirror over the same button. Everything else in
+            // the combo (e.g. a forced neutral direction) is still just a brief one-shot pulse.
+            var pulseTokens = comboTokens.Where(t => t != "$attack").ToList();
+            Fire(pulseTokens, context);
+
+            var sustained = OutputResolver.Resolve(comboTokens.Where(t => t == "$attack"), context);
+            var sustainedButton = sustained.FirstOrDefault(o => o.Kind == PrimitiveOutputKind.ControllerButton).Value;
+            if (sustainedButton is not null)
+            {
+                _comboSustainedButtons[role] = sustainedButton;
+            }
+
             OutputFired?.Invoke(pending.Match.MotionName, role);
             _pending = null;
             return true;
