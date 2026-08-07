@@ -99,15 +99,17 @@ through the Profile Editor tab. A profile has:
 - `KeyOutputs` — physical input id -> output tokens, direct passthrough/remap of any other button,
   also held for as long as the physical button is held.
 
-`AttackOutputs` and `KeyOutputs` are true passthrough: hold the physical button, the mapped output
-stays held on the virtual pad, same as a real controller would. `MotionAttackOutputs` combos are
-different on purpose — they're a brief macro (default 50ms press) fired once when the attack lands
-inside the motion's attack window, not a literal hold, since the combo's own tokens (e.g. a specific
-d-pad direction) don't necessarily match whatever the player is physically holding at that instant.
-The one exception is the combo's `$attack` token specifically: whichever button that resolves to
-stays held on the virtual pad for as long as the physical attack button is, exactly like a plain
-`AttackOutputs` press would — only the rest of the combo (e.g. a forced neutral direction) is a
-one-shot pulse.
+`AttackOutputs`, `KeyOutputs`, and `MotionAttackOutputs` are all true passthrough: hold the physical
+button, the mapped output stays held on the virtual pad for as long as you hold it, same as a real
+controller would. For a motion+attack combo, that means the combo's *entire* resolved output (its
+d-pad override included, if it has one) stays held for as long as the triggering attack button does
+— not just its attack-button token. Releasing the attack button releases everything the combo held.
+
+Internally this all comes from one "desired state, diffed each tick" pass per poll — the d-pad
+mirror, plain attack/key passthrough, and active combo outputs are resolved into a single set and
+compared against what's currently held, so nothing ever fights over the same button from two
+different code paths (that used to cause the d-pad to flicker between a combo's forced direction and
+the physically-held one).
 
 Output tokens (used in `MotionAttackOutputs`, `AttackOutputs`, `KeyOutputs`):
 

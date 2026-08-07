@@ -45,18 +45,21 @@ public class MotionInputEngineTests
         }
     }
 
-    // Regression test: after a motion+attack combo macro fires (e.g. qcf+M -> neutral + A), the
-    // combo used to be a fully one-shot ~50ms pulse. If the player kept M held down, A should stay
-    // held on the virtual pad for as long as M is, same as a plain (non-combo) attack would.
+    // Regression test: after a motion+attack combo fires (e.g. qcf+M -> a forced d-pad direction
+    // plus a literal attack button, the same shape real profiles use — not the "$attack" token),
+    // the combo used to be a fully one-shot ~50ms pulse. If the player kept M held down, the
+    // combo's button should stay held on the virtual pad for as long as M is, same as a plain
+    // (non-combo) attack would — and its d-pad override should stay put too, not flicker against
+    // whatever direction is physically held underneath it.
 
     [Fact]
-    public void Holding_the_attack_after_a_motion_combo_fires_keeps_the_combo_button_held()
+    public void Holding_the_attack_after_a_motion_combo_fires_keeps_the_combo_outputs_held()
     {
         var profile = MakeProfile();
         profile.Motions.Add(new() { Name = "qcf", Sequence = new() { 2, 3, 6 } });
         profile.MotionAttackOutputs["qcf"] = new()
         {
-            ["light"] = new() { "controller_direction:5", "$attack" },
+            ["light"] = new() { "controller_direction:6", "controller:a" },
         };
 
         var source = new FakeControllerSource();
@@ -66,6 +69,11 @@ public class MotionInputEngineTests
         engine.Start();
         try
         {
+            // Roll through all three required directions distinctly (2, then 3, then 6) rather than
+            // jumping straight to a diagonal — diagonal-adjacency leniency lets a nearby sample
+            // *substitute* for a required step, it doesn't let one sample satisfy two steps at once.
+            source.SetHeld("dpad_down");
+            Thread.Sleep(30);
             source.SetHeld("dpad_down", "dpad_right");
             Thread.Sleep(30);
             source.SetHeld("dpad_right");
@@ -73,11 +81,13 @@ public class MotionInputEngineTests
             source.SetHeld("dpad_right", "x"); // qcf completes, attack lands inside the window
 
             Thread.Sleep(200); // well past the old 50ms macro pulse duration
-            Assert.True(gamepad.IsHeld("x"));
+            Assert.True(gamepad.IsHeld("a"));
+            Assert.True(gamepad.IsHeld("dpad_right")); // combo's own d-pad override stays put
 
             source.SetHeld(); // release
             Thread.Sleep(100);
-            Assert.False(gamepad.IsHeld("x"));
+            Assert.False(gamepad.IsHeld("a"));
+            Assert.False(gamepad.IsHeld("dpad_right"));
         }
         finally
         {

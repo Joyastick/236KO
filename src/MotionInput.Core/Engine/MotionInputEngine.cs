@@ -7,35 +7,33 @@ namespace MotionInput.Core.Engine;
 
 /// <summary>
 /// Top-level orchestrator: polls the controller, resolves a numpad direction each tick, feeds a
-/// <see cref="MotionBuffer"/>/<see cref="MotionMatcher"/> pair, mirrors the direction onto the
-/// virtual pad's d-pad, and fires configured outputs when a motion completes and an attack button
-/// lands inside its attack window (or immediately, for a bare attack press).
+/// <see cref="MotionBuffer"/>/<see cref="MotionMatcher"/> pair, and drives the virtual pad from a
+/// single "desired state, diffed each tick" pass — covering the d-pad mirror, plain attack/key
+/// passthrough, and motion+attack combo outputs alike — so nothing ever fights over the same
+/// button from two different code paths.
 /// </summary>
 public sealed class MotionInputEngine : IDisposable
 {
     private readonly Profile _profile;
     private readonly IControllerSource _controllerSource;
     private readonly IVirtualGamepad _gamepad;
-    private readonly OutputDispatcher _dispatcher;
     private readonly MotionBuffer _buffer;
     private readonly MotionMatcher _matcher;
     private readonly HashSet<string> _previousDigital = new();
 
-    // Buttons/keys currently held by continuous passthrough (KeyOutputs, and AttackOutputs when no
-    // motion combo consumed the press) — diffed each tick like the d-pad, so holding a physical
-    // button holds the mapped output for as long as it's held, rather than just pulsing it once.
+    // Everything currently held on the virtual pad/keyboard, diffed each tick against a freshly
+    // computed "desired" set — press on the rising edge, release on the falling edge, hold in
+    // between. Covers the d-pad, plain AttackOutputs/KeyOutputs passthrough, and active combo
+    // outputs, all in one pass, so only one thing ever writes a given button per tick.
     private readonly HashSet<string> _heldMirroredButtons = new();
     private readonly HashSet<string> _heldMirroredKeys = new();
 
-    // Attack roles whose current hold was already consumed by a motion+attack combo macro, so the
-    // combo's own direction/other tokens don't also get pulsed again by the plain-attack path for
-    // the rest of that same hold.
+    // Attack roles whose current hold is being driven by a motion+attack combo instead of the
+    // plain AttackOutputs mapping, plus the combo's own resolved outputs (frozen at the moment it
+    // fired, e.g. the motion's start/final direction) — held for as long as the physical attack
+    // button stays down, exactly like a plain attack would be.
     private readonly HashSet<string> _comboConsumedRoles = new();
-
-    // The controller button a combo's "$attack" token resolved to, per role, kept held via the
-    // continuous mirror for as long as the physical button stays down — the rest of the combo
-    // (e.g. a forced neutral direction) is still just a brief one-shot pulse.
-    private readonly Dictionary<string, string> _comboSustainedButtons = new();
+    private readonly Dictionary<string, IReadOnlyList<PrimitiveOutput>> _comboSustainedOutputs = new();
 
     private Thread? _thread;
     private CancellationTokenSource? _cts;
@@ -46,7 +44,6 @@ public sealed class MotionInputEngine : IDisposable
         _profile = profile;
         _controllerSource = controllerSource;
         _gamepad = gamepad;
-        _dispatcher = new OutputDispatcher(gamepad);
         _buffer = new MotionBuffer();
         _matcher = new MotionMatcher(profile.Motions, profile.Leniency);
     }
@@ -86,7 +83,7 @@ public sealed class MotionInputEngine : IDisposable
         _heldMirroredButtons.Clear();
         _heldMirroredKeys.Clear();
         _comboConsumedRoles.Clear();
-        _comboSustainedButtons.Clear();
+        _comboSustainedOutputs.Clear();
 
         _gamepad.ResetAll();
         _buffer.Clear();
@@ -125,7 +122,6 @@ public sealed class MotionInputEngine : IDisposable
         SnapshotPolled?.Invoke(snapshot);
 
         var direction = DirectionMapper.Map(snapshot, _profile.ControllerInput);
-        MirrorDpad(direction);
 
         if (_buffer.Update(direction, now))
         {
@@ -141,6 +137,7 @@ public sealed class MotionInputEngine : IDisposable
 
         var desiredButtons = new HashSet<string>();
         var desiredKeys = new HashSet<string>();
+        var dpadOverridden = false;
 
         foreach (var (role, physicalIds) in _profile.AttackBindings)
         {
@@ -155,18 +152,28 @@ public sealed class MotionInputEngine : IDisposable
             if (!isHeld)
             {
                 _comboConsumedRoles.Remove(role);
-                _comboSustainedButtons.Remove(role);
+                _comboSustainedOutputs.Remove(role);
                 continue;
             }
 
-            // A press already spent on a motion+attack combo macro doesn't also re-pulse the combo's
-            // direction/other tokens for the rest of that same hold, but the combo's own attack
-            // button (its "$attack" token) still stays held for as long as the button is down.
+            // A press consumed by a motion+attack combo stays driven by the combo's own resolved
+            // outputs (its d-pad override, its attack button, whatever it declared) for as long as
+            // the physical button is down, instead of falling back to the plain AttackOutputs
+            // mapping — same continuous-hold behavior a plain attack gets, just with the combo's
+            // outputs in place of the ordinary ones.
             if (_comboConsumedRoles.Contains(role))
             {
-                if (_comboSustainedButtons.TryGetValue(role, out var sustainedButton))
+                foreach (var output in _comboSustainedOutputs[role])
                 {
-                    desiredButtons.Add(sustainedButton);
+                    if (output.Kind == PrimitiveOutputKind.ControllerButton)
+                    {
+                        desiredButtons.Add(output.Value);
+                        if (IsDpadButton(output.Value)) dpadOverridden = true;
+                    }
+                    else
+                    {
+                        desiredKeys.Add(output.Value);
+                    }
                 }
                 continue;
             }
@@ -185,6 +192,17 @@ public sealed class MotionInputEngine : IDisposable
             }
         }
 
+        // The physical stick/d-pad direction mirrors onto the virtual d-pad by default; an active
+        // combo that declared its own d-pad output (e.g. a forced neutral or specific direction)
+        // takes over instead, so the two never fight over the same buttons in the same tick.
+        if (!dpadOverridden)
+        {
+            foreach (var button in OutputResolver.DirectionButtons(direction))
+            {
+                desiredButtons.Add(button);
+            }
+        }
+
         ApplyContinuousMirror(desiredButtons, desiredKeys);
 
         _previousDigital.Clear();
@@ -200,10 +218,10 @@ public sealed class MotionInputEngine : IDisposable
     }
 
     /// <summary>
-    /// Fires the motion+attack combo macro if this press lands inside an active motion's attack
-    /// window. Returns true if it did (so the caller knows this hold shouldn't also be mirrored as
-    /// a plain attack). A press that isn't part of a combo is left for the continuous-mirror loop
-    /// in <see cref="Tick"/> to handle as an ordinary held button, not a one-shot pulse.
+    /// Resolves and records the motion+attack combo's outputs if this press lands inside an active
+    /// motion's attack window. Returns true if it did, so the caller drives this hold from the
+    /// combo's outputs (via <see cref="_comboSustainedOutputs"/>) instead of the plain attack
+    /// mapping for as long as the button stays down.
     /// </summary>
     private bool TryFireCombo(string role, DateTime now)
     {
@@ -218,20 +236,7 @@ public sealed class MotionInputEngine : IDisposable
                 FinalDirection = pending.Match.FinalDirection,
                 AttackControllerButton = ResolveAttackButton(role),
             };
-
-            // The "$attack" token is held for as long as the physical button is (via the continuous
-            // mirror in Tick), not pulsed with the rest of the combo — otherwise the dispatcher's
-            // release-after-holdMs would fight the mirror over the same button. Everything else in
-            // the combo (e.g. a forced neutral direction) is still just a brief one-shot pulse.
-            var pulseTokens = comboTokens.Where(t => t != "$attack").ToList();
-            Fire(pulseTokens, context);
-
-            var sustained = OutputResolver.Resolve(comboTokens.Where(t => t == "$attack"), context);
-            var sustainedButton = sustained.FirstOrDefault(o => o.Kind == PrimitiveOutputKind.ControllerButton).Value;
-            if (sustainedButton is not null)
-            {
-                _comboSustainedButtons[role] = sustainedButton;
-            }
+            _comboSustainedOutputs[role] = OutputResolver.Resolve(comboTokens, context);
 
             OutputFired?.Invoke(pending.Match.MotionName, role);
             _pending = null;
@@ -301,23 +306,8 @@ public sealed class MotionInputEngine : IDisposable
         return null;
     }
 
-    private void Fire(List<string> tokens, OutputContext context)
-    {
-        var resolved = OutputResolver.Resolve(tokens, context);
-        _ = _dispatcher.FireAsync(resolved, holdMs: 50);
-    }
-
-    private void MirrorDpad(int direction)
-    {
-        foreach (var button in new[] { "dpad_up", "dpad_down", "dpad_left", "dpad_right" })
-        {
-            _gamepad.SetButton(button, false);
-        }
-        foreach (var button in OutputResolver.DirectionButtons(direction))
-        {
-            _gamepad.SetButton(button, true);
-        }
-    }
+    private static bool IsDpadButton(string name) =>
+        name is "dpad_up" or "dpad_down" or "dpad_left" or "dpad_right";
 
     public void Dispose()
     {
