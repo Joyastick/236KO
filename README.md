@@ -30,6 +30,18 @@ dotnet run --project src/MotionInput.App/MotionInput.App.csproj
 Cloaking a device or whitelisting an application via the HidHide tab requires the app to run
 elevated (Administrator), since that's what the HidHide driver requires.
 
+## Building a standalone .exe
+
+```
+dotnet publish src/MotionInput.App/MotionInput.App.csproj -c Release -r win-x64
+```
+
+Produces a single self-contained `MotionInput.App.exe` (~60 MB, includes the .NET runtime, so the
+target machine doesn't need .NET installed) at
+`src/MotionInput.App/bin/Release/net9.0-windows/win-x64/publish/`. ViGEmBus and, if you want
+cloaking, HidHide still need to be installed separately — those are drivers, not something that can
+be bundled into the app.
+
 ## How it works
 
 ```
