@@ -21,6 +21,16 @@ public sealed class MotionInputEngine : IDisposable
     private readonly MotionMatcher _matcher;
     private readonly HashSet<string> _previousDigital = new();
 
+    // Buttons/keys currently held by continuous passthrough (KeyOutputs, and AttackOutputs when no
+    // motion combo consumed the press) — diffed each tick like the d-pad, so holding a physical
+    // button holds the mapped output for as long as it's held, rather than just pulsing it once.
+    private readonly HashSet<string> _heldMirroredButtons = new();
+    private readonly HashSet<string> _heldMirroredKeys = new();
+
+    // Attack roles whose current hold was already consumed by a motion+attack combo macro, so they
+    // don't *also* get continuously mirrored as a plain attack for the rest of that same hold.
+    private readonly HashSet<string> _comboConsumedRoles = new();
+
     private Thread? _thread;
     private CancellationTokenSource? _cts;
     private PendingMotion? _pending;
@@ -64,6 +74,13 @@ public sealed class MotionInputEngine : IDisposable
         _cts?.Cancel();
         _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
+
+        foreach (var button in _heldMirroredButtons) _gamepad.SetButton(button, false);
+        foreach (var key in _heldMirroredKeys) KeySender.SetKey(key, false);
+        _heldMirroredButtons.Clear();
+        _heldMirroredKeys.Clear();
+        _comboConsumedRoles.Clear();
+
         _gamepad.ResetAll();
         _buffer.Clear();
         _matcher.Reset();
@@ -115,25 +132,44 @@ public sealed class MotionInputEngine : IDisposable
             }
         }
 
+        var desiredButtons = new HashSet<string>();
+        var desiredKeys = new HashSet<string>();
+
         foreach (var (role, physicalIds) in _profile.AttackBindings)
         {
             var wasHeld = physicalIds.Any(id => _previousDigital.Contains(id));
             var isHeld = physicalIds.Any(id => snapshot.Digital.Contains(id));
-            if (isHeld && !wasHeld)
+
+            if (isHeld && !wasHeld && TryFireCombo(role, now))
             {
-                HandleAttackPress(role, now);
+                _comboConsumedRoles.Add(role);
+            }
+
+            if (!isHeld)
+            {
+                _comboConsumedRoles.Remove(role);
+                continue;
+            }
+
+            // A press already spent on a motion+attack combo macro doesn't also hold the plain
+            // attack output for the rest of that same hold — only a fresh press/release does.
+            if (_comboConsumedRoles.Contains(role)) continue;
+
+            if (_profile.AttackOutputs.TryGetValue(role, out var attackTokens))
+            {
+                CollectDesired(attackTokens, new OutputContext { AttackControllerButton = ResolveAttackButton(role) }, desiredButtons, desiredKeys);
             }
         }
 
         foreach (var (physicalId, tokens) in _profile.KeyOutputs)
         {
-            var was = _previousDigital.Contains(physicalId);
-            var isHeld = snapshot.Digital.Contains(physicalId);
-            if (isHeld && !was)
+            if (snapshot.Digital.Contains(physicalId))
             {
-                Fire(tokens, new OutputContext());
+                CollectDesired(tokens, new OutputContext(), desiredButtons, desiredKeys);
             }
         }
+
+        ApplyContinuousMirror(desiredButtons, desiredKeys);
 
         _previousDigital.Clear();
         foreach (var id in snapshot.Digital)
@@ -147,7 +183,13 @@ public sealed class MotionInputEngine : IDisposable
         }
     }
 
-    private void HandleAttackPress(string role, DateTime now)
+    /// <summary>
+    /// Fires the motion+attack combo macro if this press lands inside an active motion's attack
+    /// window. Returns true if it did (so the caller knows this hold shouldn't also be mirrored as
+    /// a plain attack). A press that isn't part of a combo is left for the continuous-mirror loop
+    /// in <see cref="Tick"/> to handle as an ordinary held button, not a one-shot pulse.
+    /// </summary>
+    private bool TryFireCombo(string role, DateTime now)
     {
         if (_pending is { } pending &&
             now <= pending.ExpiresAt &&
@@ -163,14 +205,55 @@ public sealed class MotionInputEngine : IDisposable
             Fire(comboTokens, context);
             OutputFired?.Invoke(pending.Match.MotionName, role);
             _pending = null;
-            return;
+            return true;
         }
 
-        if (_profile.AttackOutputs.TryGetValue(role, out var plainTokens))
+        if (_profile.AttackOutputs.ContainsKey(role))
         {
-            Fire(plainTokens, new OutputContext { AttackControllerButton = ResolveAttackButton(role) });
             OutputFired?.Invoke(null, role);
         }
+        return false;
+    }
+
+    private static void CollectDesired(List<string> tokens, OutputContext context, HashSet<string> desiredButtons, HashSet<string> desiredKeys)
+    {
+        foreach (var output in OutputResolver.Resolve(tokens, context))
+        {
+            if (output.Kind == PrimitiveOutputKind.ControllerButton)
+            {
+                desiredButtons.Add(output.Value);
+            }
+            else
+            {
+                desiredKeys.Add(output.Value);
+            }
+        }
+    }
+
+    private void ApplyContinuousMirror(HashSet<string> desiredButtons, HashSet<string> desiredKeys)
+    {
+        foreach (var button in _heldMirroredButtons)
+        {
+            if (!desiredButtons.Contains(button)) _gamepad.SetButton(button, false);
+        }
+        foreach (var button in desiredButtons)
+        {
+            if (!_heldMirroredButtons.Contains(button)) _gamepad.SetButton(button, true);
+        }
+
+        foreach (var key in _heldMirroredKeys)
+        {
+            if (!desiredKeys.Contains(key)) KeySender.SetKey(key, false);
+        }
+        foreach (var key in desiredKeys)
+        {
+            if (!_heldMirroredKeys.Contains(key)) KeySender.SetKey(key, true);
+        }
+
+        _heldMirroredButtons.Clear();
+        _heldMirroredButtons.UnionWith(desiredButtons);
+        _heldMirroredKeys.Clear();
+        _heldMirroredKeys.UnionWith(desiredKeys);
     }
 
     private string? ResolveAttackButton(string role)

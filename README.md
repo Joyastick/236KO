@@ -94,9 +94,16 @@ through the Profile Editor tab. A profile has:
 - `AttackBindings` — attack role (e.g. `light`) -> physical input ids that trigger it.
 - `MotionAttackOutputs` — motion name -> attack role -> output tokens, fired when the attack lands
   inside the motion's attack window.
-- `AttackOutputs` — attack role -> output tokens, fired on a bare attack press with no motion.
-- `KeyOutputs` — physical input id -> output tokens, for direct passthrough/remap of any other
-  button.
+- `AttackOutputs` — attack role -> output tokens, held on the virtual pad for as long as the
+  physical button is held (as long as that press wasn't already consumed by a combo below).
+- `KeyOutputs` — physical input id -> output tokens, direct passthrough/remap of any other button,
+  also held for as long as the physical button is held.
+
+`AttackOutputs` and `KeyOutputs` are true passthrough: hold the physical button, the mapped output
+stays held on the virtual pad, same as a real controller would. `MotionAttackOutputs` combos are
+different on purpose — they're a brief macro (default 50ms press) fired once when the attack lands
+inside the motion's attack window, not a literal hold, since the combo's own tokens (e.g. a specific
+d-pad direction) don't necessarily match whatever the player is physically holding at that instant.
 
 Output tokens (used in `MotionAttackOutputs`, `AttackOutputs`, `KeyOutputs`):
 
