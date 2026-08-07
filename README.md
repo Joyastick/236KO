@@ -50,6 +50,10 @@ This is a different implementation from the Python version's, though it aims at 
 - **Diagonal-adjacency substitution** — a direction that's one numpad "click" away from what a
   motion step requires (e.g. `1` or `3` standing in for `2`) still satisfies that step. This is
   per-motion (`AllowDiagonalSkip`) so you can tighten specific motions if they're getting mis-read.
+  It **never applies to a motion's final direction** — that one is always matched exactly. Motions
+  that share directions in different orders (`dp` = `[6,2,3]`, `qcf` = `[2,3,6]`) would otherwise
+  bleed into each other: `6` is ring-adjacent to `3`, so a fireball roll ending held on `6` would
+  satisfy dp's "final ~3" requirement and fire a dragon punch instead of/alongside the fireball.
 - **Max gap** — the longest allowed time between two consecutive required steps. Extra held frames
   or brief neutral blips between steps don't break the motion as long as they fit inside this
   window.

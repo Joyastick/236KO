@@ -6,6 +6,8 @@ namespace MotionInput.Core.Motion;
 /// Scans a <see cref="MotionBuffer"/> for the profile's motion definitions, in priority order
 /// (the order they're defined). A motion is recognized the instant its final required step lands
 /// as the buffer's most recent sample, so detection is immediate rather than polled after the fact.
+/// The final step must match exactly (see <see cref="MotionDefinition.AllowDiagonalSkip"/>); only
+/// earlier steps get diagonal-adjacency leniency.
 /// </summary>
 public sealed class MotionMatcher
 {
@@ -68,8 +70,13 @@ public sealed class MotionMatcher
             return false;
         }
 
+        // The final direction is always matched exactly, never via diagonal-adjacency substitution.
+        // Adjacency leniency is only for the roll leading up to it; if it applied here too, motions
+        // that share directions in different orders (e.g. dp [6,2,3] and qcf [2,3,6]) would bleed
+        // into each other — a qcf ending held on 6 would satisfy dp's "~3" final step, since 6 and 3
+        // are ring-adjacent, and fire dp instead of (or as well as) qcf.
         var bi = samples.Count - 1;
-        if (!Matches(samples[bi], seq[^1], motion.AllowDiagonalSkip))
+        if (samples[bi].Direction != seq[^1])
         {
             return false;
         }

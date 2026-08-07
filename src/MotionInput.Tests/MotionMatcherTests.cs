@@ -5,6 +5,7 @@ namespace MotionInput.Tests;
 public class MotionMatcherTests
 {
     private static MotionDefinition Qcf => new() { Name = "qcf", Sequence = new() { 2, 3, 6 } };
+    private static MotionDefinition Dp => new() { Name = "dp", Sequence = new() { 6, 2, 3 } };
     private static MotionLeniencySettings DefaultLeniency => new() { MaxSequenceMs = 500, MaxGapMs = 250, MotionCooldownMs = 150 };
 
     [Fact]
@@ -107,6 +108,57 @@ public class MotionMatcherTests
         buffer.Update(3, t0.AddMilliseconds(100));
 
         var result = matcher.TryMatch(buffer, t0.AddMilliseconds(100));
+        Assert.Equal("dp", result!.MotionName);
+    }
+
+    [Fact]
+    public void Final_direction_never_matches_via_diagonal_adjacency()
+    {
+        // dp requires a final "3", and 6 is ring-adjacent to 3 — but the final step must be exact,
+        // so holding 6 (as a completed qcf roll would) must never be treated as "close enough".
+        var buffer = new MotionBuffer();
+        var matcher = new MotionMatcher(new[] { Dp }, DefaultLeniency);
+        var t0 = DateTime.UtcNow;
+
+        buffer.Update(6, t0);
+        buffer.Update(2, t0.AddMilliseconds(50));
+        buffer.Update(6, t0.AddMilliseconds(100)); // ends on 6, not the required 3
+
+        Assert.Null(matcher.TryMatch(buffer, t0.AddMilliseconds(100)));
+    }
+
+    [Fact]
+    public void Quarter_circle_forward_does_not_spuriously_trigger_dragon_punch()
+    {
+        // Regression test for the reported bug: doing a clean qcf roll (2,3,6) was triggering dp
+        // because dp's final "~3" requirement was being satisfied by the adjacent "6" qcf ends on,
+        // and the rest of dp's sequence was then found further back via the same adjacency leniency.
+        var buffer = new MotionBuffer();
+        var matcher = new MotionMatcher(new[] { Dp, Qcf }, DefaultLeniency);
+        var t0 = DateTime.UtcNow;
+
+        buffer.Update(2, t0);
+        buffer.Update(3, t0.AddMilliseconds(50));
+        buffer.Update(6, t0.AddMilliseconds(100));
+
+        var result = matcher.TryMatch(buffer, t0.AddMilliseconds(100));
+        Assert.NotNull(result);
+        Assert.Equal("qcf", result!.MotionName);
+    }
+
+    [Fact]
+    public void Exact_dragon_punch_input_still_fires_even_with_diagonal_skip_enabled()
+    {
+        var buffer = new MotionBuffer();
+        var matcher = new MotionMatcher(new[] { Dp }, DefaultLeniency);
+        var t0 = DateTime.UtcNow;
+
+        buffer.Update(6, t0);
+        buffer.Update(2, t0.AddMilliseconds(50));
+        buffer.Update(3, t0.AddMilliseconds(100));
+
+        var result = matcher.TryMatch(buffer, t0.AddMilliseconds(100));
+        Assert.NotNull(result);
         Assert.Equal("dp", result!.MotionName);
     }
 }
