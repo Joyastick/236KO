@@ -42,6 +42,12 @@ public sealed class MotionMatcher
             if (TryMatchSequence(samples, motion, _leniency, out var startedAt, out var completedAt))
             {
                 _lastFired[motion.Name] = now;
+
+                // The samples that made up this motion are spent: leaving them in the buffer would
+                // let a returning/following direction complete a *different* motion that happens to
+                // share a suffix (e.g. dp's [6,2,3] rolling back to 6 also contains qcf's [2,3,6]).
+                buffer.ConsumeHistory();
+
                 return new MotionMatchResult(motion.Name, motion.Sequence[0], motion.Sequence[^1], startedAt, completedAt);
             }
         }

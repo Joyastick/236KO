@@ -161,4 +161,33 @@ public class MotionMatcherTests
         Assert.NotNull(result);
         Assert.Equal("dp", result!.MotionName);
     }
+
+    [Fact]
+    public void Completing_a_motion_consumes_its_samples_so_a_trailing_direction_cannot_start_a_different_motion()
+    {
+        // Regression test for the reported bug: doing 6,2,3,6 (a clean dp, stick naturally
+        // returning to forward afterward) was being read as dp *and then* qcf, because dp's
+        // already-used 2/3 samples plus the new trailing 6 still formed qcf's exact [2,3,6].
+        var buffer = new MotionBuffer();
+        var matcher = new MotionMatcher(new[] { Dp, Qcf }, DefaultLeniency);
+        var t0 = DateTime.UtcNow;
+
+        buffer.Update(6, t0);
+        buffer.Update(2, t0.AddMilliseconds(50));
+        buffer.Update(3, t0.AddMilliseconds(100));
+        var dpResult = matcher.TryMatch(buffer, t0.AddMilliseconds(100));
+        Assert.Equal("dp", dpResult!.MotionName);
+
+        buffer.Update(6, t0.AddMilliseconds(150));
+        var followUp = matcher.TryMatch(buffer, t0.AddMilliseconds(150));
+        Assert.Null(followUp);
+
+        // A genuinely fresh qcf performed afterward must still work — only the spent samples
+        // are consumed, not the matcher's ability to recognize future motions.
+        buffer.Update(2, t0.AddMilliseconds(500));
+        buffer.Update(3, t0.AddMilliseconds(550));
+        buffer.Update(6, t0.AddMilliseconds(600));
+        var freshQcf = matcher.TryMatch(buffer, t0.AddMilliseconds(600));
+        Assert.Equal("qcf", freshQcf!.MotionName);
+    }
 }

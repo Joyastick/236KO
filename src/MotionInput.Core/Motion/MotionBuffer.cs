@@ -75,4 +75,13 @@ public sealed class MotionBuffer
         _samples.Clear();
         _current = Neutral;
     }
+
+    /// <summary>
+    /// Drops recorded direction history without resetting the currently-tracked direction, so a
+    /// still-held direction doesn't spuriously re-register as a fresh change on the next tick. Used
+    /// after a motion is recognized so its samples can't also satisfy a different motion sharing a
+    /// suffix (e.g. dp's [6,2,3] followed by a returning "6" would otherwise still contain qcf's
+    /// [2,3,6] as a trailing subsequence).
+    /// </summary>
+    public void ConsumeHistory() => _samples.Clear();
 }

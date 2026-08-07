@@ -74,6 +74,13 @@ This is a different implementation from the Python version's, though it aims at 
   this long before giving up on combining them.
 - **Cooldown** — the minimum time before the same motion can be recognized again, so one long roll
   through several directions doesn't fire the same special repeatedly.
+- **Sample consumption on match** — once a motion is recognized, the direction samples that made it
+  up are dropped from the buffer (the currently-held direction itself is left alone, so it doesn't
+  spuriously re-register as a fresh change). Without this, a motion whose sequence is a suffix of
+  another's — dp `[6,2,3]` vs. qcf `[2,3,6]` — could fire twice off the same roll: doing a clean dp
+  and then naturally letting the stick settle back to forward would leave `[6,2,3,6]` in the buffer,
+  and `[2,3,6]` in there still reads as a complete qcf. Consuming dp's samples on its own match means
+  that trailing `6` starts a new, empty history instead of completing a second motion.
 
 All four are global defaults in a profile's Leniency section; `MaxSequenceMs`/`MaxGapMs` can be
 overridden per motion.
