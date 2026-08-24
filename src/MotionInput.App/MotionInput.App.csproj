@@ -4,12 +4,23 @@
     <ProjectReference Include="..\MotionInput.Core\MotionInput.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AssemblyName>236KO</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Product>236KO</Product>
+    <AssemblyTitle>236KO</AssemblyTitle>
+    <Company>236KO</Company>
+    <Copyright>Copyright © 236KO contributors</Copyright>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <!-- dotnet publish -c Release -r win-x64 produces a single standalone .exe that needs no .NET install -->

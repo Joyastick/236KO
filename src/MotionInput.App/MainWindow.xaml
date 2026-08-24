@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:MotionInput.App"
         mc:Ignorable="d"
         Title="236KO — Motion Input" Height="760" Width="1150"
+        Icon="app.ico"
         Closing="Window_Closing">
     <Grid>
         <Grid.RowDefinitions>

@@ -11,3 +11,6 @@ obj/
 
 ## Profiles written at runtime (ships defaults via code, not via the repo)
 **/bin/**/Profiles/
+
+## Packaged release output
+dist/
