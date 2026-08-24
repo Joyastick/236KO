@@ -157,7 +157,7 @@
                         </Grid>
 
                         <TextBlock Text="Target process (must already be running):" Margin="0,0,0,4"/>
-                        <ComboBox x:Name="CloakProcessCombo" DisplayMemberPath="DisplayName" Margin="0,0,0,10"/>
+                        <ComboBox x:Name="CloakProcessCombo" DisplayMemberPath="DisplayName" Margin="0,0,0,10" DropDownOpened="CloakProcessCombo_DropDownOpened"/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                             <Button x:Name="StartCloakButton" Content="Start Cloak" Padding="10,3" Click="StartCloakButton_Click"/>

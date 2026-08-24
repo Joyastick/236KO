@@ -698,6 +698,23 @@ public partial class MainWindow : Window
         CloakControllerCombo.ItemsSource = xinputControllers;
         if (xinputControllers.Count > 0) CloakControllerCombo.SelectedIndex = 0;
 
+        var processCount = RefreshCloakProcessList();
+
+        StatusText.Text = $"Cloak targets refreshed: {xinputControllers.Count} XInput controller(s), {processCount} candidate process(es).";
+    }
+
+    /// <summary>
+    /// Re-queries running processes just before the dropdown opens, not only on the explicit
+    /// Refresh button — the previous selection can go stale between a refresh and clicking Start
+    /// (e.g. a launcher process handing off to the real game process under a new PID), which
+    /// surfaced as a confusing "No running process with id ..." error at Start time.
+    /// </summary>
+    private void CloakProcessCombo_DropDownOpened(object? sender, EventArgs e) => RefreshCloakProcessList();
+
+    private int RefreshCloakProcessList()
+    {
+        var previouslySelected = (CloakProcessCombo.SelectedItem as CloakTargetProcess)?.Id;
+
         var selfId = Environment.ProcessId;
         var processes = Process.GetProcesses()
             .Where(p => p.Id != selfId && !string.IsNullOrWhiteSpace(SafeMainWindowTitle(p)))
@@ -705,9 +722,18 @@ public partial class MainWindow : Window
             .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
         CloakProcessCombo.ItemsSource = processes;
-        if (processes.Count > 0) CloakProcessCombo.SelectedIndex = 0;
 
-        StatusText.Text = $"Cloak targets refreshed: {xinputControllers.Count} XInput controller(s), {processes.Count} candidate process(es).";
+        var stillPresent = previouslySelected is { } id ? processes.FirstOrDefault(p => p.Id == id) : null;
+        if (stillPresent is not null)
+        {
+            CloakProcessCombo.SelectedItem = stillPresent;
+        }
+        else if (processes.Count > 0)
+        {
+            CloakProcessCombo.SelectedIndex = 0;
+        }
+
+        return processes.Count;
     }
 
     private static string SafeMainWindowTitle(Process process)
@@ -746,6 +772,14 @@ public partial class MainWindow : Window
             CloakStatusText.Text = $"Active — hiding {controller.DisplayName} from {target.DisplayName}";
             CloakStatusDot.Fill = Brushes.LimeGreen;
             StatusText.Text = "Cloak active.";
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No running process", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                $"{target.DisplayName} isn't running anymore (its process id changed or it closed). " +
+                "This happens if the list was refreshed before the target relaunched under a new PID — " +
+                "click \"Refresh lists\" and pick it again.",
+                "Process no longer running", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
