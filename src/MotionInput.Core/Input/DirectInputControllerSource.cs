@@ -69,18 +69,22 @@ public sealed class DirectInputControllerSource : IControllerSource
             }
         }
 
-        if (state.PointOfViewControllers.Length > 0)
+        // Some boards (notably PS3/PS4-compatible arcade-stick encoders in DirectInput mode) put the
+        // d-pad on a hat switch that isn't necessarily index 0, or a browser/tester tool reports it as
+        // "axis 9" purely because that's how such tools flatten a hat's angle into the axis list — the
+        // underlying DirectInput object is still a point-of-view controller either way, so scan all of
+        // them rather than assuming index 0 is the live one.
+        for (var i = 0; i < state.PointOfViewControllers.Length; i++)
         {
-            var pov = state.PointOfViewControllers[0];
-            if (pov >= 0)
-            {
-                // Hundredths of a degree, clockwise from up. Treat anything within 67.5 degrees of an
-                // axis as that direction so diagonal hat positions raise both axes (matches a d-pad).
-                if (pov is > 31500 or <= 4500) digital.Add("dpad_up");
-                if (pov is > 4500 and <= 13500) digital.Add("dpad_right");
-                if (pov is > 13500 and <= 22500) digital.Add("dpad_down");
-                if (pov is > 22500 and <= 31500) digital.Add("dpad_left");
-            }
+            var pov = state.PointOfViewControllers[i];
+            if (pov < 0) continue;
+
+            // Hundredths of a degree, clockwise from up. Treat anything within 67.5 degrees of an
+            // axis as that direction so diagonal hat positions raise both axes (matches a d-pad).
+            if (pov is > 31500 or <= 4500) digital.Add("dpad_up");
+            if (pov is > 4500 and <= 13500) digital.Add("dpad_right");
+            if (pov is > 13500 and <= 22500) digital.Add("dpad_down");
+            if (pov is > 22500 and <= 31500) digital.Add("dpad_left");
         }
 
         var analog = new Dictionary<string, float>
@@ -89,7 +93,28 @@ public sealed class DirectInputControllerSource : IControllerSource
             ["leftstick_y"] = -Normalize(state.Y),
             ["rightstick_x"] = Normalize(state.RotationZ),
             ["rightstick_y"] = -Normalize(state.Z),
+            // Raw copies of every axis DirectInput exposes (independent of which ones feed the stick
+            // aliases above), plus the hat angles, so the Monitor tab can show what a given physical
+            // input reports even before it's bound to anything. This is what makes it possible to
+            // figure out, e.g., that a tester tool's "axis 9" is really point-of-view controller 0.
+            ["axis_x"] = Normalize(state.X),
+            ["axis_y"] = Normalize(state.Y),
+            ["axis_z"] = Normalize(state.Z),
+            ["axis_rx"] = Normalize(state.RotationX),
+            ["axis_ry"] = Normalize(state.RotationY),
+            ["axis_rz"] = Normalize(state.RotationZ),
         };
+
+        for (var i = 0; i < state.Sliders.Length; i++)
+        {
+            analog[$"axis_slider{i}"] = Normalize(state.Sliders[i]);
+        }
+
+        for (var i = 0; i < state.PointOfViewControllers.Length; i++)
+        {
+            var pov = state.PointOfViewControllers[i];
+            analog[$"pov{i}"] = pov < 0 ? -1f : pov / 36000f;
+        }
 
         return new ControllerSnapshot(DateTime.UtcNow, digital, analog);
     }

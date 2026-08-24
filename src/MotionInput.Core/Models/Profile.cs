@@ -13,8 +13,6 @@ public sealed class Profile
 
     public ControllerInputSettings ControllerInput { get; set; } = new();
 
-    public HidHideProfileSettings HidHide { get; set; } = new();
-
     public MotionLeniencySettings Leniency { get; set; } = new();
 
     /// <summary>Attack role (e.g. "light") -> physical input ids that trigger it (e.g. ["x"]).</summary>

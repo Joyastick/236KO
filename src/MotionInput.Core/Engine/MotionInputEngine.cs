@@ -21,6 +21,11 @@ public sealed class MotionInputEngine : IDisposable
     private readonly MotionMatcher _matcher;
     private readonly HashSet<string> _previousDigital = new();
 
+    // Role name (e.g. "s1") -> the controller button that role's AttackOutputs currently resolves
+    // to, computed once up front so an output token can name any role directly (e.g. "S1") instead
+    // of just the role that's currently triggering ($attack).
+    private readonly IReadOnlyDictionary<string, string> _roleButtons;
+
     // Everything currently held on the virtual pad/keyboard, diffed each tick against a freshly
     // computed "desired" set — press on the rising edge, release on the falling edge, hold in
     // between. Covers the d-pad, plain AttackOutputs/KeyOutputs passthrough, and active combo
@@ -46,6 +51,11 @@ public sealed class MotionInputEngine : IDisposable
         _gamepad = gamepad;
         _buffer = new MotionBuffer();
         _matcher = new MotionMatcher(profile.Motions, profile.Leniency);
+
+        _roleButtons = profile.AttackOutputs.Keys
+            .Select(role => (role, button: ResolveAttackButton(role)))
+            .Where(t => t.button is not null)
+            .ToDictionary(t => t.role, t => t.button!, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>Raised on every poll with the raw snapshot, for UI display.</summary>
@@ -57,8 +67,8 @@ public sealed class MotionInputEngine : IDisposable
     /// <summary>Raised the instant a motion's sequence completes, whether or not an attack follows.</summary>
     public event Action<MotionMatchResult>? MotionDetected;
 
-    /// <summary>Raised whenever outputs are actually fired: motion name (or null for a bare attack) and the attack role (or null for a motion with no attack).</summary>
-    public event Action<string?, string?>? OutputFired;
+    /// <summary>Raised whenever outputs are actually fired: motion name (or null for a bare attack), the attack role, and the raw profile tokens that were resolved (e.g. ["5", "S1"]).</summary>
+    public event Action<string?, string?, IReadOnlyList<string>>? OutputFired;
 
     public bool IsRunning => _thread is { IsAlive: true };
 
@@ -165,14 +175,18 @@ public sealed class MotionInputEngine : IDisposable
             {
                 foreach (var output in _comboSustainedOutputs[role])
                 {
-                    if (output.Kind == PrimitiveOutputKind.ControllerButton)
+                    switch (output.Kind)
                     {
-                        desiredButtons.Add(output.Value);
-                        if (IsDpadButton(output.Value)) dpadOverridden = true;
-                    }
-                    else
-                    {
-                        desiredKeys.Add(output.Value);
+                        case PrimitiveOutputKind.ControllerButton:
+                            desiredButtons.Add(output.Value);
+                            if (IsDpadButton(output.Value)) dpadOverridden = true;
+                            break;
+                        case PrimitiveOutputKind.DirectionOverride:
+                            dpadOverridden = true;
+                            break;
+                        case PrimitiveOutputKind.Key:
+                            desiredKeys.Add(output.Value);
+                            break;
                     }
                 }
                 continue;
@@ -180,7 +194,7 @@ public sealed class MotionInputEngine : IDisposable
 
             if (_profile.AttackOutputs.TryGetValue(role, out var attackTokens))
             {
-                CollectDesired(attackTokens, new OutputContext { AttackControllerButton = ResolveAttackButton(role) }, desiredButtons, desiredKeys);
+                CollectDesired(attackTokens, new OutputContext { AttackControllerButton = ResolveAttackButton(role), RoleButtons = _roleButtons }, desiredButtons, desiredKeys);
             }
         }
 
@@ -188,7 +202,7 @@ public sealed class MotionInputEngine : IDisposable
         {
             if (snapshot.Digital.Contains(physicalId))
             {
-                CollectDesired(tokens, new OutputContext(), desiredButtons, desiredKeys);
+                CollectDesired(tokens, new OutputContext { RoleButtons = _roleButtons }, desiredButtons, desiredKeys);
             }
         }
 
@@ -235,17 +249,18 @@ public sealed class MotionInputEngine : IDisposable
                 StartDirection = pending.Match.StartDirection,
                 FinalDirection = pending.Match.FinalDirection,
                 AttackControllerButton = ResolveAttackButton(role),
+                RoleButtons = _roleButtons,
             };
             _comboSustainedOutputs[role] = OutputResolver.Resolve(comboTokens, context);
 
-            OutputFired?.Invoke(pending.Match.MotionName, role);
+            OutputFired?.Invoke(pending.Match.MotionName, role, comboTokens);
             _pending = null;
             return true;
         }
 
-        if (_profile.AttackOutputs.ContainsKey(role))
+        if (_profile.AttackOutputs.TryGetValue(role, out var bareTokens))
         {
-            OutputFired?.Invoke(null, role);
+            OutputFired?.Invoke(null, role, bareTokens);
         }
         return false;
     }
@@ -254,13 +269,17 @@ public sealed class MotionInputEngine : IDisposable
     {
         foreach (var output in OutputResolver.Resolve(tokens, context))
         {
-            if (output.Kind == PrimitiveOutputKind.ControllerButton)
+            switch (output.Kind)
             {
-                desiredButtons.Add(output.Value);
-            }
-            else
-            {
-                desiredKeys.Add(output.Value);
+                case PrimitiveOutputKind.ControllerButton:
+                    desiredButtons.Add(output.Value);
+                    break;
+                case PrimitiveOutputKind.Key:
+                    desiredKeys.Add(output.Value);
+                    break;
+                // DirectionOverride only has meaning for combo outputs (see the switch in Tick()),
+                // which suppress the physical-direction mirror; plain AttackOutputs/KeyOutputs
+                // entries are additive and never suppress it, so it's a no-op here.
             }
         }
     }

@@ -33,6 +33,48 @@
         </Border>
 
         <TabControl Grid.Row="1" Margin="6">
+            <TabItem Header="Bindings">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,14">
+                            Select a controller above, then hit <Run FontWeight="Bold">Listen</Run> next to each 2XKO input and press
+                            it on your controller. Directions set which D-Pad/stick source is used; every other input is bound to
+                            whatever button you press and passed straight through to the emulated pad — edit them further in the
+                            Profile Editor tab if needed.
+                        </TextBlock>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="240"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Input" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="Bound to" FontWeight="Bold"/>
+                        </Grid>
+
+                        <ItemsControl x:Name="BindingRowsControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="240"/>
+                                                <ColumnDefinition Width="140"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding BoundText}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Content="{Binding ListenButtonText}" Padding="8,2" HorizontalAlignment="Left" Click="ListenButton_Click" Tag="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Monitor">
                 <Grid Margin="6">
                     <Grid.ColumnDefinitions>
@@ -51,6 +93,9 @@
 
                         <TextBlock Text="Held Inputs" FontWeight="Bold"/>
                         <TextBlock x:Name="HeldInputsText" Text="—" TextWrapping="Wrap" Margin="0,4,0,12"/>
+
+                        <TextBlock Text="Analog / Axis Values" FontWeight="Bold"/>
+                        <TextBlock x:Name="AnalogValuesText" Text="—" TextWrapping="Wrap" Margin="0,4,0,12" FontFamily="Consolas" FontSize="11"/>
 
                         <TextBlock Text="Pending Motion / Attack Window" FontWeight="Bold"/>
                         <TextBlock x:Name="PendingMotionText" Text="—" Margin="0,4,0,12" TextWrapping="Wrap"/>
@@ -72,9 +117,9 @@
 
                         <TextBlock Text="Controller Input" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <CheckBox x:Name="UseDpadCheck" Content="D-Pad" Margin="0,0,16,0"/>
-                            <CheckBox x:Name="UseLeftStickCheck" Content="Left Stick" Margin="0,0,16,0"/>
-                            <CheckBox x:Name="UseRightStickCheck" Content="Right Stick" Margin="0,0,16,0"/>
+                            <CheckBox x:Name="UseDpadCheck" Content="D-Pad" Margin="0,0,16,0" Checked="DirectionSourceCheck_Changed" Unchecked="DirectionSourceCheck_Changed"/>
+                            <CheckBox x:Name="UseLeftStickCheck" Content="Left Stick" Margin="0,0,16,0" Checked="DirectionSourceCheck_Changed" Unchecked="DirectionSourceCheck_Changed"/>
+                            <CheckBox x:Name="UseRightStickCheck" Content="Right Stick" Margin="0,0,16,0" Checked="DirectionSourceCheck_Changed" Unchecked="DirectionSourceCheck_Changed"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <TextBlock Text="Stick deadzone:" VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -108,20 +153,43 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <TextBlock Text="Attack Bindings (role -&gt; physical input ids, comma separated)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                        <DataGrid x:Name="AttackBindingsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="120" Margin="0,0,0,16">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="140"/>
-                                <DataGridTextColumn Header="Physical input ids" Binding="{Binding ValuesText}" Width="300"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <TextBlock Text="Motion + Attack Outputs (fires when the attack lands inside the motion's attack window)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <TextBlock Text="Motion + Attack Outputs (fires when the attack lands inside the motion's attack window) — direction, then role" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
                         <DataGrid x:Name="MotionOutputsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="200" Margin="0,0,0,16">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Motion" Binding="{Binding Motion}" Width="120"/>
-                                <DataGridTextColumn Header="Attack role" Binding="{Binding Role}" Width="100"/>
-                                <DataGridTextColumn Header="Output tokens (comma separated)" Binding="{Binding TokensText}" Width="380"/>
+                                <DataGridTemplateColumn Header="Attack role" Width="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=RoleNameOptions}"
+                                                      IsEditable="True" Text="{Binding Role, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Direction" Width="180">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=DirectionOutputOptions}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Token"
+                                                      SelectedValue="{Binding Direction, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Output role" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=RoleNameOptions}"
+                                                      IsEditable="True" Text="{Binding OutputRole, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Output role 2 (optional)" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=RoleNameOptions}"
+                                                      IsEditable="True" Text="{Binding OutputRole2, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -133,46 +201,8 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <TextBlock Text="Key Outputs (direct passthrough/remap of any other physical input)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                        <DataGrid x:Name="KeyOutputsGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Height="150" Margin="0,0,0,16">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Physical input id" Binding="{Binding Role}" Width="160"/>
-                                <DataGridTextColumn Header="Output tokens (comma separated)" Binding="{Binding ValuesText}" Width="340"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="HidHide">
-                <StackPanel Margin="14">
-                    <TextBlock x:Name="HidHideStatusText" Text="HidHide status: unknown" FontWeight="Bold" Margin="0,0,0,10"/>
-
-                    <CheckBox x:Name="CloakingEnabledCheck" Content="Cloaking enabled (physical controller hidden from every app except the whitelist below)" Margin="0,0,0,14"/>
-
-                    <TextBlock Text="Target application (the game/launcher exe that should NOT see the real controller)" FontWeight="Bold" Margin="0,0,0,4"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBox x:Name="ApplicationPathBox" Width="500"/>
-                        <Button x:Name="BrowseApplicationButton" Content="Browse…" Margin="6,0,0,0" Padding="8,2" Click="BrowseApplicationButton_Click"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Button x:Name="WhitelistSelfButton" Content="Whitelist this app (so it can still read the real pad)" Padding="8,2" Click="WhitelistSelfButton_Click"/>
-                    </StackPanel>
-
-                    <TextBlock Text="Devices to cloak" FontWeight="Bold" Margin="0,0,0,4"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Button x:Name="RefreshHidHideDevicesButton" Content="Refresh device list" Padding="8,2" Click="RefreshHidHideDevicesButton_Click"/>
-                        <Button x:Name="ApplyHidHideButton" Content="Apply" Margin="8,0,0,0" Padding="8,2" Click="ApplyHidHideButton_Click"/>
-                    </StackPanel>
-                    <DataGrid x:Name="HidHideDevicesGrid" AutoGenerateColumns="False" CanUserAddRows="False" Height="240">
-                        <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="Cloak" Binding="{Binding IsCloaked}" Width="60"/>
-                            <DataGridTextColumn Header="Device" Binding="{Binding FriendlyName}" Width="360" IsReadOnly="True"/>
-                            <DataGridTextColumn Header="Instance Id" Binding="{Binding InstanceId}" Width="420" IsReadOnly="True"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </StackPanel>
             </TabItem>
         </TabControl>
 

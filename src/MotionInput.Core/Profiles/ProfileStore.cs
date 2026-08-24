@@ -64,7 +64,7 @@ public sealed class ProfileStore
         return name;
     }
 
-    /// <summary>Ships a fighting-game-standard starter profile: qcf/qcb/dp/rdp/half-circles, mapped to A/B on the virtual pad.</summary>
+    /// <summary>Ships a fighting-game-standard starter profile: qcf/qcb/dp/rdp/half-circles, whose special outputs are bound to the S1/S2 roles (bind them in the Bindings tab to activate).</summary>
     public static Profile CreateDefault(string name = "Default")
     {
         var profile = new Profile
@@ -85,43 +85,48 @@ public sealed class ProfileStore
                 ["medium"] = new() { "y" },
                 ["heavy"] = new() { "rb" },
             },
+            // Direction,role notation: a bare numpad digit for the d-pad, a bare role name (matched
+            // case-insensitively against AttackBindings/AttackOutputs) for the button — exactly one
+            // of each per entry, matching the Motion + Attack Outputs grid's Direction/Output role
+            // dropdowns. "S1"/"S2" are the two special-move roles — bind them in the Bindings tab to
+            // activate these combos; until then they resolve to nothing (no crash, no output).
             MotionAttackOutputs = new Dictionary<string, Dictionary<string, List<string>>>
             {
                 ["qcf"] = new()
                 {
-                    ["light"] = new() { "controller_direction:6", "controller:a" },
-                    ["medium"] = new() { "$controller_motion_final", "controller:b" },
-                    ["heavy"] = new() { "controller:a", "controller:b" },
+                    ["light"] = new() { "6", "S1" },
+                    ["medium"] = new() { "$controller_motion_final", "S2" },
+                    ["heavy"] = new() { "6", "S1", "S2" },
                 },
                 ["qcb"] = new()
                 {
-                    ["light"] = new() { "controller_direction:4", "controller:a" },
-                    ["medium"] = new() { "$controller_motion_final", "controller:b" },
-                    ["heavy"] = new() { "controller:a", "controller:b" },
+                    ["light"] = new() { "4", "S1" },
+                    ["medium"] = new() { "$controller_motion_final", "S2" },
+                    ["heavy"] = new() { "4", "S1", "S2" },
                 },
                 ["dp"] = new()
                 {
-                    ["light"] = new() { "controller_direction:6", "controller:a" },
-                    ["medium"] = new() { "controller_direction:2", "controller:b" },
-                    ["heavy"] = new() { "controller_direction:2", "controller:a" },
+                    ["light"] = new() { "6", "S1" },
+                    ["medium"] = new() { "2", "S2" },
+                    ["heavy"] = new() { "2", "S1", "S2" },
                 },
                 ["rdp"] = new()
                 {
-                    ["light"] = new() { "controller_direction:4", "controller:a" },
-                    ["medium"] = new() { "controller_direction:2", "controller:b" },
-                    ["heavy"] = new() { "controller_direction:2", "controller:a" },
+                    ["light"] = new() { "4", "S1" },
+                    ["medium"] = new() { "2", "S2" },
+                    ["heavy"] = new() { "2", "S1", "S2" },
                 },
                 ["half_circle_forward"] = new()
                 {
-                    ["light"] = new() { "controller:x", "controller:a" },
-                    ["medium"] = new() { "controller:x", "controller:b" },
-                    ["heavy"] = new() { "controller:a", "controller:b" },
+                    ["light"] = new() { "$controller_motion_start", "S1" },
+                    ["medium"] = new() { "$controller_motion_final", "S2" },
+                    ["heavy"] = new() { "$controller_motion_start", "S1", "S2" },
                 },
                 ["half_circle_back"] = new()
                 {
-                    ["light"] = new() { "controller:x", "controller:a" },
-                    ["medium"] = new() { "controller:x", "controller:b" },
-                    ["heavy"] = new() { "controller:a", "controller:b" },
+                    ["light"] = new() { "$controller_motion_start", "S1" },
+                    ["medium"] = new() { "$controller_motion_final", "S2" },
+                    ["heavy"] = new() { "$controller_motion_start", "S1", "S2" },
                 },
             },
             AttackOutputs = new Dictionary<string, List<string>>

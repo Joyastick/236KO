@@ -1,5 +1,6 @@
 using MotionInput.Core.Engine;
 using MotionInput.Core.Models;
+using MotionInput.Core.Profiles;
 using MotionInput.Tests.Fakes;
 
 namespace MotionInput.Tests;
@@ -88,6 +89,96 @@ public class MotionInputEngineTests
             Thread.Sleep(100);
             Assert.False(gamepad.IsHeld("a"));
             Assert.False(gamepad.IsHeld("dpad_right"));
+        }
+        finally
+        {
+            engine.Stop();
+        }
+    }
+
+    // Regression test for the role-name output notation ("236 + Light = 5 + S1"): a combo should be
+    // able to name a completely different role's bound button as its output, resolved through that
+    // role's own AttackOutputs (not the raw physical button it was captured on), and "5" should force
+    // the d-pad to neutral (no press) rather than mirroring whatever direction is still held.
+
+    [Fact]
+    public void Motion_combo_output_can_name_another_role_and_force_neutral_direction()
+    {
+        var profile = MakeProfile();
+        profile.AttackBindings["s1"] = new() { "rb" };
+        profile.AttackOutputs["s1"] = new() { "controller:lb" }; // s1 is remapped, not a plain passthrough
+        profile.Motions.Add(new() { Name = "qcf", Sequence = new() { 2, 3, 6 } });
+        profile.MotionAttackOutputs["qcf"] = new()
+        {
+            ["light"] = new() { "5", "s1" },
+        };
+
+        var source = new FakeControllerSource();
+        var gamepad = new FakeVirtualGamepad();
+        using var engine = new MotionInputEngine(profile, source, gamepad);
+
+        engine.Start();
+        try
+        {
+            source.SetHeld("dpad_down");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_down", "dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_right", "x"); // qcf completes, light lands inside the window
+
+            Thread.Sleep(200);
+            Assert.True(gamepad.IsHeld("lb")); // "s1" resolved through s1's own AttackOutputs, not "rb"
+            Assert.False(gamepad.IsHeld("dpad_up"));
+            Assert.False(gamepad.IsHeld("dpad_down"));
+            Assert.False(gamepad.IsHeld("dpad_left"));
+            Assert.False(gamepad.IsHeld("dpad_right")); // "5" forced neutral, overriding the held direction
+
+            source.SetHeld();
+            Thread.Sleep(100);
+            Assert.False(gamepad.IsHeld("lb"));
+        }
+        finally
+        {
+            engine.Stop();
+        }
+    }
+
+    // Regression test for the shipped default profile's "direction,role" combo notation (e.g. qcf's
+    // light entry is literally {"6", "S1"}): once S1 is bound the way the Bindings tab would bind it
+    // (AttackBindings + AttackOutputs, same as any other role), the dp special should actually fire.
+
+    [Fact]
+    public void Default_profile_dp_light_combo_fires_through_the_S1_role_once_bound()
+    {
+        var profile = ProfileStore.CreateDefault();
+        profile.AttackBindings["s1"] = new() { "rb" };
+        profile.AttackOutputs["s1"] = new() { "controller:rb" };
+
+        var source = new FakeControllerSource();
+        var gamepad = new FakeVirtualGamepad();
+        using var engine = new MotionInputEngine(profile, source, gamepad);
+
+        engine.Start();
+        try
+        {
+            // dp = [6, 2, 3]
+            source.SetHeld("dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_down");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_down", "dpad_right");
+            Thread.Sleep(30);
+            source.SetHeld("dpad_down", "dpad_right", "x"); // dp completes, light lands inside the window
+
+            Thread.Sleep(200);
+            Assert.True(gamepad.IsHeld("rb")); // "S1" resolved through s1's AttackOutputs
+            Assert.True(gamepad.IsHeld("dpad_right")); // dp light's "6" forced direction
+
+            source.SetHeld();
+            Thread.Sleep(100);
+            Assert.False(gamepad.IsHeld("rb"));
         }
         finally
         {
