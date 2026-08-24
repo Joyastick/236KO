@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using MotionInput.Core.Cloak;
 using MotionInput.Core.Engine;
+using MotionInput.Core.HidHide;
 using MotionInput.Core.Input;
 using MotionInput.Core.Models;
 using MotionInput.Core.Motion;
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<BindingRow> _bindingRows = new();
     private readonly ObservableCollection<ControllerDriverInfo> _driverCandidates = new();
     private readonly ProcessCloakService _cloakService = new();
+    private readonly HidHideService _hidHideService = new();
+    private readonly ObservableCollection<HidHideDeviceRow> _hidHideDeviceRows = new();
 
     private Profile _profile = ProfileStore.CreateDefault();
     private MotionInputEngine? _engine;
@@ -85,6 +88,7 @@ public partial class MainWindow : Window
         }
         BindingRowsControl.ItemsSource = _bindingRows;
         DriverCandidatesControl.ItemsSource = _driverCandidates;
+        HidHideDevicesControl.ItemsSource = _hidHideDeviceRows;
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _uiTimer.Tick += UiTimer_Tick;
@@ -92,6 +96,7 @@ public partial class MainWindow : Window
 
         LoadProfileList();
         RefreshControllers();
+        RefreshHidHideStatus();
     }
 
     // ---------------- Controllers ----------------
@@ -503,6 +508,94 @@ public partial class MainWindow : Window
     // ---------------- Bindings ----------------
 
     private void DirectionSourceCheck_Changed(object sender, RoutedEventArgs e) => RefreshBindingRowsDisplay();
+
+    // ---------------- HidHide Cloak ----------------
+
+    private void RefreshHidHideButton_Click(object sender, RoutedEventArgs e) => RefreshHidHideStatus();
+
+    private void RefreshHidHideStatus()
+    {
+        if (!_hidHideService.IsInstalled)
+        {
+            HidHideStatusText.Text = "HidHide status: not installed. Install it from https://github.com/nefarius/HidHide/releases, then click Refresh again.";
+            _hidHideDeviceRows.Clear();
+            HidHideDevicesEmptyText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HidHideStatusText.Text = $"HidHide status: installed, {(_hidHideService.IsOperational ? "operational" : "driver not running")}";
+        HidHideCloakingEnabledCheck.IsChecked = _hidHideService.CloakingEnabled;
+
+        var blocked = _hidHideService.BlockedInstanceIds;
+        _hidHideDeviceRows.Clear();
+        foreach (var device in _hidHideService.ListDevices())
+        {
+            _hidHideDeviceRows.Add(new HidHideDeviceRow
+            {
+                InstanceId = device.InstanceId,
+                FriendlyName = device.FriendlyName,
+                IsCloaked = blocked.Contains(device.InstanceId, StringComparer.OrdinalIgnoreCase),
+            });
+        }
+
+        HidHideDevicesEmptyText.Visibility = _hidHideDeviceRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void WhitelistSelfHidHideButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_hidHideService.IsInstalled)
+        {
+            MessageBox.Show("HidHide is not installed.", "HidHide", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            _hidHideService.AllowSelf();
+            StatusText.Text = "236KO whitelisted with HidHide — it'll keep reading cloaked devices even once cloaking is enabled.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to whitelist this app: {ex.Message}\n\nThis usually requires running 236KO as Administrator.", "HidHide error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void HidHideCloakingEnabledCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_hidHideService.IsInstalled) return;
+
+        try
+        {
+            _hidHideService.CloakingEnabled = HidHideCloakingEnabledCheck.IsChecked == true;
+            StatusText.Text = $"HidHide cloaking {(_hidHideService.CloakingEnabled ? "enabled" : "disabled")}.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to toggle cloaking: {ex.Message}\n\nThis usually requires running 236KO as Administrator.", "HidHide error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void HidHideDeviceCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.CheckBox { Tag: HidHideDeviceRow row } || !_hidHideService.IsInstalled) return;
+
+        try
+        {
+            if (row.IsCloaked)
+            {
+                _hidHideService.CloakDevice(row.InstanceId);
+            }
+            else
+            {
+                _hidHideService.UncloakDevice(row.InstanceId);
+            }
+            StatusText.Text = $"{(row.IsCloaked ? "Cloaked" : "Uncloaked")} \"{row.FriendlyName}\". Unplug/replug it (or relaunch the game) for the change to take effect.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to update cloaking for this device: {ex.Message}\n\nThis usually requires running 236KO as Administrator.", "HidHide error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     // ---------------- Hide from Game (experimental) ----------------
 

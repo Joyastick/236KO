@@ -97,7 +97,57 @@
             <TabItem Header="Hide from Game (experimental)">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="Hide the real controller from 2XKO" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <TextBlock Text="HidHide Cloak (recommended — works once your controller is DirectInput, not XInput)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            HidHide filters the standard Windows HID class stack — the same layer DirectInput reads from. It can't
+                            see XInput devices at all (they bypass that stack entirely), which is why it never worked while your
+                            controller was in XInput mode. Now that it reports as generic DirectInput/HID, HidHide can cloak it from
+                            every app except this one.
+                        </TextBlock>
+                        <TextBlock x:Name="HidHideStatusText" Text="HidHide status: unknown" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="RefreshHidHideButton" Content="Refresh device list" Padding="8,2" Click="RefreshHidHideButton_Click"/>
+                            <Button x:Name="WhitelistSelfHidHideButton" Content="Whitelist this app" Padding="8,2" Margin="8,0,0,0" Click="WhitelistSelfHidHideButton_Click"/>
+                            <CheckBox x:Name="HidHideCloakingEnabledCheck" Content="Cloaking enabled" VerticalAlignment="Center" Margin="16,0,0,0" Checked="HidHideCloakingEnabledCheck_Changed" Unchecked="HidHideCloakingEnabledCheck_Changed"/>
+                        </StackPanel>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="320"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Cloak" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="Device" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="2" Text="Instance Id" FontWeight="Bold"/>
+                        </Grid>
+
+                        <ItemsControl x:Name="HidHideDevicesControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="320"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsCloaked, UpdateSourceTrigger=PropertyChanged}"
+                                                      Checked="HidHideDeviceCheck_Changed" Unchecked="HidHideDeviceCheck_Changed" Tag="{Binding}"
+                                                      VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding FriendlyName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding InstanceId}" VerticalAlignment="Center" FontSize="10" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="HidHideDevicesEmptyText" Text="Click &quot;Refresh device list&quot; to list connected HID devices." Foreground="Gray" Margin="0,8,0,16"/>
+
+                        <Separator Margin="0,4,0,16"/>
+
+                        <TextBlock Text="Driver Rebind (alternate — only needed if HidHide isn't installed)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
                             HidHide can't cloak XInput controllers — it only filters the HID class stack, and XInput talks to the
                             device through a separate driver path HidHide never sees. The real fix is changing which Windows driver
@@ -161,7 +211,7 @@
 
                         <Separator Margin="0,20,0,16"/>
 
-                        <TextBlock Text="Per-Process Cloak" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <TextBlock Text="Per-Process Cloak (alternate — use if you need to hide from just one specific process instead of everything)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
                             Hides one controller from a single, already-running process only — every other process (including
                             other games, or this app itself) still sees it normally. Works by injecting a small helper into

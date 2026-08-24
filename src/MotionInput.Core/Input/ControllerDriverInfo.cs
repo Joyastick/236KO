@@ -17,4 +17,7 @@ public sealed record ControllerDriverInfo(string InstanceId, string FriendlyName
 
     /// <summary>Friendly status string for display, based on <see cref="IsBoundToXInputDriver"/>.</summary>
     public string StatusText => IsBoundToXInputDriver ? "XInput-visible" : "Hidden from XInput";
+
+    /// <summary>Label for the one-click rebind button, which toggles based on current state.</summary>
+    public string RebindButtonLabel => IsBoundToXInputDriver ? "Hide from XInput (Admin)" : "Restore XInput (Admin)";
 }

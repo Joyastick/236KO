@@ -3,6 +3,14 @@ using System.Runtime.CompilerServices;
 
 namespace MotionInput.App;
 
+/// <summary>Row for the HidHide Cloak section's device list, one per HID device HidHide can see.</summary>
+public sealed class HidHideDeviceRow
+{
+    public required string InstanceId { get; init; }
+    public required string FriendlyName { get; init; }
+    public bool IsCloaked { get; set; }
+}
+
 /// <summary>DataGrid row for a <see cref="MotionInput.Core.Motion.MotionDefinition"/>.</summary>
 public sealed class MotionRow
 {
