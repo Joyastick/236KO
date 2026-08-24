@@ -3,7 +3,8 @@
 A fighting-game motion input reader for Windows. It watches a physical controller, recognizes
 numpad-notation motions (`236` = quarter-circle forward, `623` = dragon punch, etc.), and — when a
 motion completes with an attack button inside a configurable window — emits a different button
-combination on an emulated Xbox 360 controller.
+combination on an emulated Xbox 360 controller. Optionally, it can also hide your real controller
+from the game via HidHide, so only the emulated pad is seen.
 
 This is a from-scratch C#/.NET/WPF rewrite of the Python proof-of-concept in the sibling
 `MotionInputs2XKO` repo, built to be more reliable and to have a proper editable-profile UI.
@@ -11,9 +12,16 @@ This is a from-scratch C#/.NET/WPF rewrite of the Python proof-of-concept in the
 ## Requirements
 
 - Windows 10/11.
-- [.NET 9 SDK](https://dotnet.microsoft.com/download) to build/run from source.
+- [.NET 9 SDK](https://dotnet.microsoft.com/download) to build/run from source. Not needed to just
+  run a published build — see [Building a standalone .exe](#building-a-standalone-exe).
 - [ViGEmBus driver](https://github.com/ViGEm/ViGEmBus/releases) — required for the emulated
-  controller output. Without it, `Start` will show an error.
+  controller output.
+- [HidHide driver](https://github.com/nefarius/HidHide/releases) — optional, only needed if you want
+  to hide your real controller from the game. HidHide only works on a controller running in
+  DirectInput/generic-HID mode — it can't cloak XInput devices, since XInput bypasses the HID class
+  stack entirely.
+
+Both drivers are checked for at startup; 236KO won't open its main window until both are installed.
 
 ## Running
 
@@ -27,10 +35,26 @@ dotnet run --project src/MotionInput.App/MotionInput.App.csproj
 dotnet publish src/MotionInput.App/MotionInput.App.csproj -c Release -r win-x64
 ```
 
-Produces a single self-contained `MotionInput.App.exe` (~60 MB, includes the .NET runtime, so the
-target machine doesn't need .NET installed) at
-`src/MotionInput.App/bin/Release/net9.0-windows/win-x64/publish/`. ViGEmBus still needs to be
-installed separately — that's a driver, not something that can be bundled into the app.
+Produces a single self-contained `236KO.exe` (~60 MB, includes the .NET runtime, so the target
+machine doesn't need .NET installed) at
+`src/MotionInput.App/bin/Release/net9.0-windows/win-x64/publish/`. ViGEmBus and HidHide still need
+to be installed separately — those are drivers, not something that can be bundled into the app.
+
+## Using the app
+
+- **Bindings** — press-to-bind wizard for all 2XKO inputs (directions, Light/Medium/Heavy/S1/S2/Tag/
+  Start/Select/Dash/Break/Parry). Directions set which D-Pad/stick source is used; every other input
+  captures whatever physical button you press, and separately lets you pick which virtual Xbox 360
+  button it should fire — the two are independent, since a DirectInput controller's physical button
+  ids (e.g. `button5`) aren't valid Xbox button names and can't just be passed straight through.
+- **Hide from Game** — HidHide cloaking: lists connected HID devices, lets you pick which one(s) to
+  cloak, toggle cloaking on/off, and manage the whitelist of applications (236KO itself, plus
+  anything else you add) that can still see the real controller while everything else can't.
+- **Monitor** — live view of the current direction, held inputs, raw analog/axis values, the
+  pending motion/attack window, the last output sent to the virtual pad, and a recognition log.
+- **Profile Editor** — full editable view of everything a profile holds: controller input settings,
+  buffer/leniency timing, the motion list, attack bindings, and the Motion + Attack Outputs table
+  (which direction+role combination fires for each recognized motion).
 
 ## How it works
 
@@ -80,8 +104,8 @@ sample — detection is immediate, not something polled after the fact.
 
 ### Profiles
 
-Profiles are JSON files in a `Profiles/` folder next to the executable, editable either by hand or
-through the Profile Editor tab. A profile has:
+Profiles are JSON files in a `Profiles/` folder next to the executable, editable either by hand,
+through the Bindings tab's press-to-bind wizard, or through the Profile Editor tab. A profile has:
 
 - `ControllerInput` — which of `dpad`/`left_stick`/`right_stick` feed the direction mapper, stick
   deadzone, trigger threshold, poll rate.
@@ -137,13 +161,30 @@ device has (`axis_x/y/z/rx/ry/rz`, `axis_slider0/1`, `pov0..3`) purely for diagn
 Monitor tab's **Analog / Axis Values** readout while pressing a button one at a time to see which id
 moves, if you need to work out a `button<N>` binding for a pad with a non-obvious layout.
 
+## Hiding your controller from the game
+
+If you don't want the game reacting to both your real controller and the emulated one, install
+[HidHide](https://github.com/nefarius/HidHide/releases) and use the Hide from Game tab:
+
+1. Switch your controller to DirectInput/generic-HID mode (hardware/firmware-dependent — GP2040-CE-
+   based controllers and many fightsticks support this). HidHide can't cloak an XInput device.
+2. Click **Refresh device list**, check **Cloak** next to your controller.
+3. Click **Whitelist this app** — 236KO needs to keep reading the real controller even while
+   everything else is cloaked from it.
+4. Check **Cloaking enabled**.
+5. Unplug/replug the controller (or restart the game) for the change to take effect.
+
+Whitelisting and toggling cloaking both require Administrator the first time you do them.
+
 ## Project layout
 
 - `src/MotionInput.Core` — all logic: input reading, direction mapping, motion buffer/matcher,
-  output resolution/dispatch, ViGEm wrapper, profile model/persistence. No UI dependency, fully
-  unit-testable.
-- `src/MotionInput.App` — WPF shell: controller/profile selection, live monitor, profile editor.
-- `src/MotionInput.Tests` — xUnit tests for the direction mapper and motion buffer/matcher.
+  output resolution/dispatch, ViGEm wrapper, HidHide wrapper, profile model/persistence. No UI
+  dependency, fully unit-testable.
+- `src/MotionInput.App` — WPF shell: Bindings wizard, Hide from Game (HidHide) tab, live monitor,
+  profile editor.
+- `src/MotionInput.Tests` — xUnit tests for the direction mapper, motion buffer/matcher, and
+  DirectInput hat-switch decoding.
 
 ## Known limitations
 
@@ -155,3 +196,6 @@ moves, if you need to work out a `button<N>` binding for a pad with a non-obviou
   X/Y axes, first hat = d-pad) since DirectInput doesn't self-describe a "standard" layout the way
   XInput does; unusual pads may need `button<N>` bindings worked out by watching the Monitor tab's
   held-inputs readout while pressing buttons one at a time.
+- HidHide cannot cloak XInput controllers under any circumstances — it only filters the Windows HID
+  class stack, which XInput bypasses entirely. This is a Windows/driver-level limitation, not
+  something 236KO can work around; the only fix is running the controller in DirectInput mode.
