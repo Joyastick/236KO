@@ -47,9 +47,27 @@ public static class ButtonRoles
 }
 
 /// <summary>
+/// The literal buttons the emulated Xbox 360 pad (<see cref="MotionInput.Core.Output.VirtualGamepad"/>)
+/// understands. What a role's physical input is bound to (any backend — XInput names like "a", or a
+/// DirectInput controller's generic "button5") and what virtual button it fires are two separate
+/// things: DirectInput ids have no meaning as XInput output tokens, so they can't just be reused as
+/// the output the way an XInput controller's own button names conveniently can.
+/// </summary>
+public static class XInputButtons
+{
+    public static readonly IReadOnlyList<string> Names = new[]
+    {
+        "a", "b", "x", "y", "lb", "rb", "lt", "rt", "start", "back", "ls", "rs",
+    };
+}
+
+/// <summary>
 /// Row for the Bindings tab's press-to-bind wizard, one per 2XKO input (the four directions plus
-/// Light/Medium/Heavy/S1/S2/Tag). Directions toggle the existing D-Pad/stick source checkboxes;
-/// everything else writes straight into the Attack Bindings/Attack Outputs grids as a passthrough.
+/// Light/Medium/Heavy/S1/S2/Tag/Start/Select/Dash/Break/Parry). Directions toggle the existing
+/// D-Pad/stick source checkboxes. Everything else captures a physical input (any backend) into
+/// Attack Bindings, plus a separately-chosen virtual button (<see cref="OutputButton"/>) into
+/// Attack Outputs — the physical id itself is only ever a good *default* for the output when it
+/// happens to already be a valid XInput button name.
 /// </summary>
 public sealed class BindingRow : INotifyPropertyChanged
 {
@@ -62,6 +80,14 @@ public sealed class BindingRow : INotifyPropertyChanged
     {
         get => _boundText;
         set { _boundText = value; OnChanged(); }
+    }
+
+    /// <summary>Which virtual Xbox 360 button this role fires, e.g. "a". Empty = not yet configured (fires nothing).</summary>
+    private string _outputButton = string.Empty;
+    public string OutputButton
+    {
+        get => _outputButton;
+        set { _outputButton = value; OnChanged(); }
     }
 
     private bool _isListening;

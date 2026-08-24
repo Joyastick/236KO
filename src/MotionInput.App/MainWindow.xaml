@@ -38,19 +38,24 @@
                     <StackPanel Margin="14">
                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,14">
                             Select a controller above, then hit <Run FontWeight="Bold">Listen</Run> next to each 2XKO input and press
-                            it on your controller. Directions set which D-Pad/stick source is used; every other input is bound to
-                            whatever button you press and passed straight through to the emulated pad — edit them further in the
-                            Profile Editor tab if needed.
+                            it on your controller. Directions set which D-Pad/stick source is used. Every other input captures
+                            whatever physical button you press into <Run FontStyle="Italic">Bound to</Run> — separately, pick which
+                            virtual Xbox 360 button it should fire in <Run FontStyle="Italic">Output</Run>. These are independent:
+                            a DirectInput controller's physical buttons (e.g. "button5") aren't valid Xbox button names, so unlike an
+                            XInput controller's own buttons, they can't just be passed straight through — pick the Output manually
+                            for those. Edit further in the Profile Editor tab if needed.
                         </TextBlock>
 
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="240"/>
-                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="110"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Input" FontWeight="Bold"/>
                             <TextBlock Grid.Column="1" Text="Bound to" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="2" Text="Output" FontWeight="Bold"/>
                         </Grid>
 
                         <ItemsControl x:Name="BindingRowsControl">
@@ -59,13 +64,27 @@
                                     <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="120"/>
-                                                <ColumnDefinition Width="240"/>
-                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="110"/>
+                                                <ColumnDefinition Width="170"/>
+                                                <ColumnDefinition Width="100"/>
+                                                <ColumnDefinition Width="110"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="{Binding DisplayName}" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding BoundText}" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Content="{Binding ListenButtonText}" Padding="8,2" HorizontalAlignment="Left" Click="ListenButton_Click" Tag="{Binding}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding BoundText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <ComboBox Grid.Column="2" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=XInputButtonOptions}"
+                                                      SelectedItem="{Binding OutputButton, UpdateSourceTrigger=PropertyChanged}"
+                                                      SelectionChanged="OutputButtonCombo_SelectionChanged" Tag="{Binding}" Margin="0,0,4,0">
+                                                <ComboBox.Style>
+                                                    <Style TargetType="ComboBox">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDirection}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ComboBox.Style>
+                                            </ComboBox>
+                                            <Button Grid.Column="3" Content="{Binding ListenButtonText}" Padding="8,2" HorizontalAlignment="Left" Click="ListenButton_Click" Tag="{Binding}"/>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -96,17 +115,20 @@
                         </TextBlock>
                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,14" Foreground="Orange">
                             Experimental: this changes system-wide driver binding for the device, affecting every app until you roll
-                            it back — not just 2XKO. Try it on a controller you don't mind troubleshooting first.
+                            it back — not just 2XKO. Try it on a controller you don't mind troubleshooting first. The one-click
+                            rebind buttons below require Administrator (a UAC prompt appears) and aren't guaranteed to succeed on
+                            every controller/Windows version — fall back to "Update driver…" and picking manually if they fail.
                         </TextBlock>
 
                         <Button x:Name="ScanDriversButton" Content="Scan for controllers" Padding="8,2" HorizontalAlignment="Left" Margin="0,0,0,10" Click="ScanDriversButton_Click"/>
 
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="260"/>
-                                <ColumnDefinition Width="140"/>
-                                <ColumnDefinition Width="150"/>
-                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="160"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Device" FontWeight="Bold"/>
                             <TextBlock Grid.Column="1" Text="Current driver" FontWeight="Bold"/>
@@ -119,15 +141,17 @@
                                     <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="260"/>
-                                                <ColumnDefinition Width="140"/>
-                                                <ColumnDefinition Width="150"/>
-                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="220"/>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="160"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="{Binding FriendlyName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Grid.Column="1" Text="{Binding DriverService}" VerticalAlignment="Center"/>
                                             <TextBlock Grid.Column="2" Text="{Binding StatusText}" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="3" Content="Update driver…" Padding="8,2" HorizontalAlignment="Left" Click="OpenDeviceProperties_Click" Tag="{Binding InstanceId}"/>
+                                            <Button Grid.Column="3" Content="Update driver…" Padding="6,2" HorizontalAlignment="Left" Click="OpenDeviceProperties_Click" Tag="{Binding InstanceId}"/>
+                                            <Button Grid.Column="4" Content="{Binding RebindButtonLabel}" Padding="6,2" HorizontalAlignment="Left" Click="RebindDriver_Click" Tag="{Binding}"/>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

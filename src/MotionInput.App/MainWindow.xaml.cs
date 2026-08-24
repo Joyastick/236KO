@@ -42,6 +42,9 @@ public partial class MainWindow : Window
     /// <summary>Role names offered by the Motion + Attack Outputs role dropdowns (same vocabulary as the Bindings tab).</summary>
     public IReadOnlyList<string> RoleNameOptions { get; } = ButtonRoles.Names;
 
+    /// <summary>Virtual Xbox 360 buttons offered by the Bindings tab's per-role Output dropdown.</summary>
+    public IReadOnlyList<string> XInputButtonOptions { get; } = XInputButtons.Names;
+
     /// <summary>Direction choices offered by the Motion + Attack Outputs direction dropdown.</summary>
     public IReadOnlyList<DirectionOutputOption> DirectionOutputOptions { get; } = new[]
     {
@@ -541,6 +544,52 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RebindDriver_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: ControllerDriverInfo info }) return;
+
+        var mode = info.IsBoundToXInputDriver ? "hid" : "xinput";
+        var actionDescription = mode == "hid"
+            ? "hide it from XInput (bind it to the generic HID driver)"
+            : "restore XInput visibility (bind it back to the Xbox-compatible driver)";
+
+        var confirm = MessageBox.Show(
+            $"This will {actionDescription} for \"{info.FriendlyName}\", system-wide — affecting every app, not just 2XKO, " +
+            "until you rebind it back. A UAC prompt will appear since this requires Administrator. Continue?",
+            "Rebind driver", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var exePath = Process.GetCurrentProcess().MainModule!.FileName!;
+            var psi = new ProcessStartInfo(exePath)
+            {
+                Arguments = $"--rebind-driver \"{info.InstanceId}\" {mode}",
+                UseShellExecute = true,
+                Verb = "runas",
+            };
+            using var elevatedProcess = Process.Start(psi);
+            elevatedProcess!.WaitForExit();
+
+            if (elevatedProcess.ExitCode == 0)
+            {
+                StatusText.Text = $"Driver rebind succeeded for \"{info.FriendlyName}\". Click \"Scan for controllers\" again (or unplug/replug it) to confirm.";
+            }
+            else
+            {
+                MessageBox.Show(
+                    "The rebind didn't succeed. This doesn't work on every controller/Windows version — try \"Update driver…\" " +
+                    "and pick \"HID-compliant game controller\" manually instead.",
+                    "Rebind failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // User declined the UAC prompt.
+            StatusText.Text = "Driver rebind cancelled (UAC prompt declined).";
+        }
+    }
+
     private async void ListenButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button { Tag: BindingRow row }) return;
@@ -647,13 +696,44 @@ public partial class MainWindow : Window
         {
             // Every button-style role — Light/Medium/Heavy included — is keyed by its role name in
             // AttackBindings/AttackOutputs, so it round-trips through a saved profile and can be
-            // named directly in a combo's output tokens (e.g. "S1"), not just passed through blind.
+            // named directly in a combo's output tokens (e.g. "S1").
             SetRowValue(_attackBindingRows, row.Role, detected);
-            SetRowValue(_attackOutputRows, row.Role, $"controller:{detected}");
+
+            // The physical input and the virtual output are separate concerns: a DirectInput
+            // controller's "button5" isn't a valid Xbox button name, so it can't just be passed
+            // through the way an XInput controller's own button names conveniently can. Only
+            // default the Output dropdown when the captured id genuinely is one.
+            if (XInputButtonOptions.Any(b => string.Equals(b, detected, StringComparison.OrdinalIgnoreCase)))
+            {
+                row.OutputButton = detected.ToLowerInvariant();
+                SetRowValue(_attackOutputRows, row.Role, $"controller:{row.OutputButton}");
+            }
+            else
+            {
+                row.OutputButton = string.Empty;
+                RemoveRowValue(_attackOutputRows, row.Role);
+            }
+
             AttackOutputsGrid.Items.Refresh();
         }
 
         RefreshBindingRowsDisplay();
+    }
+
+    private void OutputButtonCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ComboBox { Tag: BindingRow row } || row.IsDirection) return;
+
+        if (string.IsNullOrEmpty(row.OutputButton))
+        {
+            RemoveRowValue(_attackOutputRows, row.Role);
+        }
+        else
+        {
+            SetRowValue(_attackOutputRows, row.Role, $"controller:{row.OutputButton}");
+        }
+
+        AttackOutputsGrid.Items.Refresh();
     }
 
     private static void SetRowValue(ObservableCollection<KeyValueRow> rows, string role, string valuesText)
@@ -667,6 +747,12 @@ public partial class MainWindow : Window
         {
             existing.ValuesText = valuesText;
         }
+    }
+
+    private static void RemoveRowValue(ObservableCollection<KeyValueRow> rows, string role)
+    {
+        var existing = rows.FirstOrDefault(r => string.Equals(r.Role, role, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null) rows.Remove(existing);
     }
 
     private void RefreshBindingRowsDisplay()
@@ -687,6 +773,12 @@ public partial class MainWindow : Window
 
             var match = _attackBindingRows.FirstOrDefault(r => string.Equals(r.Role, row.Role, StringComparison.OrdinalIgnoreCase));
             row.BoundText = match is not null && !string.IsNullOrWhiteSpace(match.ValuesText) ? match.ValuesText : "Not bound";
+
+            // Sync the Output dropdown from whatever AttackOutputs currently holds (e.g. after
+            // loading a saved profile), so it doesn't silently reset to blank on every refresh.
+            var outputMatch = _attackOutputRows.FirstOrDefault(r => string.Equals(r.Role, row.Role, StringComparison.OrdinalIgnoreCase));
+            var outputToken = outputMatch?.ValuesText.Split(',', StringSplitOptions.TrimEntries).FirstOrDefault(t => t.StartsWith("controller:", StringComparison.OrdinalIgnoreCase));
+            row.OutputButton = outputToken is not null ? outputToken["controller:".Length..].ToLowerInvariant() : string.Empty;
         }
     }
 
