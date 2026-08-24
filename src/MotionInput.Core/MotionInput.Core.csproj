@@ -10,6 +10,7 @@
     <PackageReference Include="Nefarius.ViGEm.Client" Version="1.21.256" />
     <PackageReference Include="SharpDX.DirectInput" Version="4.2.0" />
     <PackageReference Include="SharpDX.XInput" Version="4.2.0" />
+    <PackageReference Include="Reloaded.Injector" Version="1.2.5" />
   </ItemGroup>
 
 </Project>

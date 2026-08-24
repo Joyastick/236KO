@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MotionInput.Core.Cloak;
 using MotionInput.Core.Engine;
 using MotionInput.Core.Input;
 using MotionInput.Core.Models;
@@ -26,6 +28,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<KeyValueRow> _keyOutputRows = new();
     private readonly ObservableCollection<BindingRow> _bindingRows = new();
     private readonly ObservableCollection<ControllerDriverInfo> _driverCandidates = new();
+    private readonly ProcessCloakService _cloakService = new();
 
     private Profile _profile = ProfileStore.CreateDefault();
     private MotionInputEngine? _engine;
@@ -687,9 +690,85 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---------------- Per-Process Cloak ----------------
+
+    private void RefreshCloakTargetsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var xinputControllers = _controllerManager.ListAvailable().Where(c => c.Backend == ControllerBackend.XInput).ToList();
+        CloakControllerCombo.ItemsSource = xinputControllers;
+        if (xinputControllers.Count > 0) CloakControllerCombo.SelectedIndex = 0;
+
+        var selfId = Environment.ProcessId;
+        var processes = Process.GetProcesses()
+            .Where(p => p.Id != selfId && !string.IsNullOrWhiteSpace(SafeMainWindowTitle(p)))
+            .Select(p => new CloakTargetProcess(p.Id, $"{SafeMainWindowTitle(p)} ({p.ProcessName}.exe, PID {p.Id})"))
+            .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        CloakProcessCombo.ItemsSource = processes;
+        if (processes.Count > 0) CloakProcessCombo.SelectedIndex = 0;
+
+        StatusText.Text = $"Cloak targets refreshed: {xinputControllers.Count} XInput controller(s), {processes.Count} candidate process(es).";
+    }
+
+    private static string SafeMainWindowTitle(Process process)
+    {
+        try
+        {
+            return process.MainWindowTitle;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private void StartCloakButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (CloakControllerCombo.SelectedItem is not ControllerDescriptor controller || controller.Backend != ControllerBackend.XInput)
+        {
+            MessageBox.Show("Select an XInput controller to hide. Only XInput controllers can be cloaked this way.", "No controller", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (CloakProcessCombo.SelectedItem is not CloakTargetProcess target)
+        {
+            MessageBox.Show("Select a running process to hide the controller from.", "No process", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var userIndex = int.Parse(controller.Id.Split(':')[1], CultureInfo.InvariantCulture);
+
+        try
+        {
+            _cloakService.Start(target.Id, userIndex);
+            StartCloakButton.IsEnabled = false;
+            StopCloakButton.IsEnabled = true;
+            CloakStatusText.Text = $"Active — hiding {controller.DisplayName} from {target.DisplayName}";
+            CloakStatusDot.Fill = Brushes.LimeGreen;
+            StatusText.Text = "Cloak active.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to start cloak: {ex.Message}", "Cloak failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void StopCloakButton_Click(object sender, RoutedEventArgs e)
+    {
+        _cloakService.Stop();
+        StartCloakButton.IsEnabled = true;
+        StopCloakButton.IsEnabled = false;
+        CloakStatusText.Text = "Inactive";
+        CloakStatusDot.Fill = Brushes.Gray;
+        StatusText.Text = "Cloak stopped; controller visible to that process again.";
+    }
+
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _captureCts?.Cancel();
+        _cloakService.Dispose();
         StopEngine();
     }
+
+    private sealed record CloakTargetProcess(int Id, string DisplayName);
 }

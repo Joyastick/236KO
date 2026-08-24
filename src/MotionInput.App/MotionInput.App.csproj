@@ -4,6 +4,13 @@
     <ProjectReference Include="..\MotionInput.Core\MotionInput.Core.csproj" />
   </ItemGroup>
 
+  <!-- Cloak runtime (CloakBootstrap.dll + MotionInput.Cloak.Payload.dll + their dependencies) —
+       shipped as loose files next to the exe, not bundled into the single-file publish, since
+       ProcessCloakService injects CloakBootstrap.dll by its on-disk path into other processes. -->
+  <ItemGroup>
+    <None Include="Cloak\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>

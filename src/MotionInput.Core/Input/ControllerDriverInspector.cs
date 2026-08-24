@@ -92,6 +92,42 @@ public static class ControllerDriverInspector
         return results;
     }
 
+    /// <summary>Debug/diagnostic helper: lists every present PnP device with no filtering, for figuring out why a controller didn't match <see cref="ListCandidates"/>'s heuristic.</summary>
+    public static IReadOnlyList<ControllerDriverInfo> ListAllForDebug()
+    {
+        var results = new List<ControllerDriverInfo>();
+
+        var deviceInfoSet = SetupDiGetClassDevs(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, DigcfPresent | DigcfAllClasses);
+        if (deviceInfoSet == IntPtr.Zero || deviceInfoSet.ToInt64() == -1)
+        {
+            return results;
+        }
+
+        try
+        {
+            var devInfoData = new SP_DEVINFO_DATA();
+            devInfoData.cbSize = (uint)Marshal.SizeOf<SP_DEVINFO_DATA>();
+
+            for (uint index = 0; SetupDiEnumDeviceInfo(deviceInfoSet, index, ref devInfoData); index++)
+            {
+                var friendlyName = GetStringProperty(deviceInfoSet, ref devInfoData, SpdrpFriendlyName)
+                                   ?? GetStringProperty(deviceInfoSet, ref devInfoData, SpdrpDeviceDesc)
+                                   ?? "(unnamed device)";
+                var service = GetStringProperty(deviceInfoSet, ref devInfoData, SpdrpService);
+                var deviceClass = GetStringProperty(deviceInfoSet, ref devInfoData, SpdrpClass);
+                var instanceId = GetInstanceId(devInfoData.DevInst) ?? "(no instance id)";
+
+                results.Add(new ControllerDriverInfo(instanceId, friendlyName, service, deviceClass));
+            }
+        }
+        finally
+        {
+            SetupDiDestroyDeviceInfoList(deviceInfoSet);
+        }
+
+        return results;
+    }
+
     /// <summary>
     /// Opens Windows' own device properties dialog for this device (Driver tab first click away),
     /// so the user can pick "Update Driver" → "Browse my computer for drivers" → "Let me pick from
