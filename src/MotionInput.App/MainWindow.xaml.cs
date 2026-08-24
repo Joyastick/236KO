@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<KeyValueRow> _attackOutputRows = new();
     private readonly ObservableCollection<KeyValueRow> _keyOutputRows = new();
     private readonly ObservableCollection<BindingRow> _bindingRows = new();
+    private readonly ObservableCollection<ControllerDriverInfo> _driverCandidates = new();
 
     private Profile _profile = ProfileStore.CreateDefault();
     private MotionInputEngine? _engine;
@@ -77,6 +78,7 @@ public partial class MainWindow : Window
             _bindingRows.Add(new BindingRow { Role = role, DisplayName = char.ToUpperInvariant(role[0]) + role[1..], IsDirection = false });
         }
         BindingRowsControl.ItemsSource = _bindingRows;
+        DriverCandidatesControl.ItemsSource = _driverCandidates;
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _uiTimer.Tick += UiTimer_Tick;
@@ -495,6 +497,46 @@ public partial class MainWindow : Window
     // ---------------- Bindings ----------------
 
     private void DirectionSourceCheck_Changed(object sender, RoutedEventArgs e) => RefreshBindingRowsDisplay();
+
+    // ---------------- Hide from Game (experimental) ----------------
+
+    private void ScanDriversButton_Click(object sender, RoutedEventArgs e)
+    {
+        _driverCandidates.Clear();
+        IReadOnlyList<ControllerDriverInfo> found;
+        try
+        {
+            found = ControllerDriverInspector.ListCandidates();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to scan for controllers: {ex.Message}", "Scan failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        foreach (var candidate in found)
+        {
+            _driverCandidates.Add(candidate);
+        }
+
+        DriverScanEmptyText.Visibility = _driverCandidates.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        DriverScanEmptyText.Text = _driverCandidates.Count == 0
+            ? "No candidate controllers found. Make sure it's plugged in, or it may not match the detection heuristic — see the notes above."
+            : "";
+        StatusText.Text = $"Found {_driverCandidates.Count} candidate device(s).";
+    }
+
+    private void OpenDeviceProperties_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string instanceId }) return;
+
+        if (!ControllerDriverInspector.TryOpenDeviceProperties(instanceId))
+        {
+            MessageBox.Show(
+                "Couldn't open the device properties dialog automatically. Open Device Manager manually instead, find this device, and use its Driver tab.",
+                "Couldn't open dialog", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private async void ListenButton_Click(object sender, RoutedEventArgs e)
     {

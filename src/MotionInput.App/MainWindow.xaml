@@ -75,6 +75,69 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="Hide from Game (experimental)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="Hide the real controller from 2XKO" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            HidHide can't cloak XInput controllers — it only filters the HID class stack, and XInput talks to the
+                            device through a separate driver path HidHide never sees. The real fix is changing which Windows driver
+                            owns the controller: if it's not bound to the Xbox-compatible class driver, XInput (and most modern games,
+                            including UE-based titles) can't see it at all, while 236KO can still read it as a generic HID/DirectInput
+                            device.
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            This scans for candidate controllers and shows which driver each is currently bound to. Click
+                            <Run FontWeight="Bold">Update driver…</Run> to open Windows' own device dialog, then: Update Driver →
+                            Browse my computer for drivers → Let me pick from a list of available drivers → select
+                            <Run FontWeight="Bold">HID-compliant game controller</Run>. This app does not change the driver binding
+                            itself — that step is entirely Windows' own wizard, which also has a built-in
+                            <Run FontStyle="Italic">Roll Back Driver</Run> button on the same screen if you want to undo it.
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,14" Foreground="Orange">
+                            Experimental: this changes system-wide driver binding for the device, affecting every app until you roll
+                            it back — not just 2XKO. Try it on a controller you don't mind troubleshooting first.
+                        </TextBlock>
+
+                        <Button x:Name="ScanDriversButton" Content="Scan for controllers" Padding="8,2" HorizontalAlignment="Left" Margin="0,0,0,10" Click="ScanDriversButton_Click"/>
+
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="260"/>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Device" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="Current driver" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="2" Text="Status" FontWeight="Bold"/>
+                        </Grid>
+
+                        <ItemsControl x:Name="DriverCandidatesControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="260"/>
+                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="150"/>
+                                                <ColumnDefinition Width="140"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding FriendlyName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding DriverService}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="3" Content="Update driver…" Padding="8,2" HorizontalAlignment="Left" Click="OpenDeviceProperties_Click" Tag="{Binding InstanceId}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="DriverScanEmptyText" Text="Click &quot;Scan for controllers&quot; to list candidates." Foreground="Gray" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Monitor">
                 <Grid Margin="6">
                     <Grid.ColumnDefinitions>
