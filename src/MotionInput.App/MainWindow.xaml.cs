@@ -781,6 +781,15 @@ public partial class MainWindow : Window
                 "click \"Refresh lists\" and pick it again.",
                 "Process no longer running", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+        catch (Exception ex) when (ex.Message.Contains("last error 5", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                $"Windows denied access to {target.DisplayName} (error 5 = Access Denied). This almost always means " +
+                "that process is running elevated (as Administrator — common for anti-cheat-protected games) while " +
+                "236KO isn't. Close 236KO and relaunch it as Administrator (right-click the exe → Run as administrator), " +
+                "then try again.",
+                "Access denied — try running as Administrator", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
         catch (Exception ex)
         {
             MessageBox.Show($"Failed to start cloak: {ex.Message}", "Cloak failed", MessageBoxButton.OK, MessageBoxImage.Error);
