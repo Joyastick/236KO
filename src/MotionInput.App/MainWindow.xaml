@@ -36,16 +36,6 @@
             <TabItem Header="Bindings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,14">
-                            Select a controller above, then hit <Run FontWeight="Bold">Listen</Run> next to each 2XKO input and press
-                            it on your controller. Directions set which D-Pad/stick source is used. Every other input captures
-                            whatever physical button you press into <Run FontStyle="Italic">Bound to</Run> — separately, pick which
-                            virtual Xbox 360 button it should fire in <Run FontStyle="Italic">Output</Run>. These are independent:
-                            a DirectInput controller's physical buttons (e.g. "button5") aren't valid Xbox button names, so unlike an
-                            XInput controller's own buttons, they can't just be passed straight through — pick the Output manually
-                            for those. Edit further in the Profile Editor tab if needed.
-                        </TextBlock>
-
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="110"/>
@@ -97,13 +87,7 @@
             <TabItem Header="Hide from Game (experimental)">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="HidHide Cloak (recommended — works once your controller is DirectInput, not XInput)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                            HidHide filters the standard Windows HID class stack — the same layer DirectInput reads from. It can't
-                            see XInput devices at all (they bypass that stack entirely), which is why it never worked while your
-                            controller was in XInput mode. Now that it reports as generic DirectInput/HID, HidHide can cloak it from
-                            every app except this one.
-                        </TextBlock>
+                        <TextBlock Text="HidHide Cloak" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
                         <TextBlock x:Name="HidHideStatusText" Text="HidHide status: unknown" FontWeight="Bold" Margin="0,0,0,10"/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -144,6 +128,42 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock x:Name="HidHideDevicesEmptyText" Text="Click &quot;Refresh device list&quot; to list connected HID devices." Foreground="Gray" Margin="0,8,0,16"/>
+
+                        <TextBlock Text="Whitelisted Applications (can still see the real controller once cloaking is enabled)" FontWeight="Bold" FontSize="14" Margin="0,10,0,6"/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            236KO whitelists itself automatically via "Whitelist this app" above. Add any other application here
+                            (e.g. a launcher, or the game's exe directly if it needs to see the controller too) — everything not on
+                            this list is cloaked once "Cloaking enabled" is checked.
+                        </TextBlock>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" x:Name="WhitelistAppPathBox" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Browse…" Padding="8,2" Click="BrowseWhitelistAppButton_Click"/>
+                            <Button Grid.Column="2" Content="Add" Padding="8,2" Margin="8,0,0,0" Click="AddWhitelistAppButton_Click"/>
+                        </Grid>
+
+                        <ItemsControl x:Name="HidHideWhitelistControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#FF3A3A3A" BorderThickness="0,0,0,1" Padding="0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <Button Grid.Column="1" Content="Remove" Padding="6,2" Click="RemoveWhitelistAppButton_Click" Tag="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="HidHideWhitelistEmptyText" Text="No applications whitelisted yet." Foreground="Gray" Margin="0,8,0,16"/>
 
                     </StackPanel>
                 </ScrollViewer>

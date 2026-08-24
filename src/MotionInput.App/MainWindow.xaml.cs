@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<BindingRow> _bindingRows = new();
     private readonly HidHideService _hidHideService = new();
     private readonly ObservableCollection<HidHideDeviceRow> _hidHideDeviceRows = new();
+    private readonly ObservableCollection<string> _hidHideWhitelistRows = new();
 
     private Profile _profile = ProfileStore.CreateDefault();
     private MotionInputEngine? _engine;
@@ -85,6 +86,7 @@ public partial class MainWindow : Window
         }
         BindingRowsControl.ItemsSource = _bindingRows;
         HidHideDevicesControl.ItemsSource = _hidHideDeviceRows;
+        HidHideWhitelistControl.ItemsSource = _hidHideWhitelistRows;
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _uiTimer.Tick += UiTimer_Tick;
@@ -516,6 +518,8 @@ public partial class MainWindow : Window
             HidHideStatusText.Text = "HidHide status: not installed. Install it from https://github.com/nefarius/HidHide/releases, then click Refresh again.";
             _hidHideDeviceRows.Clear();
             HidHideDevicesEmptyText.Visibility = Visibility.Visible;
+            _hidHideWhitelistRows.Clear();
+            HidHideWhitelistEmptyText.Visibility = Visibility.Visible;
             return;
         }
 
@@ -523,18 +527,102 @@ public partial class MainWindow : Window
         HidHideCloakingEnabledCheck.IsChecked = _hidHideService.CloakingEnabled;
 
         var blocked = _hidHideService.BlockedInstanceIds;
+        var devices = _hidHideService.ListDevices();
+
+        // Duplicate names are common (a single physical controller shows up as several HID
+        // collections — buttons, LEDs, a touchpad — that all inherit the same parent product
+        // name). Number the duplicates so each row in the list stays distinguishable at a glance.
+        var nameOccurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var nameTotals = devices
+            .GroupBy(d => d.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
         _hidHideDeviceRows.Clear();
-        foreach (var device in _hidHideService.ListDevices())
+        foreach (var device in devices)
         {
+            var displayName = device.FriendlyName;
+            if (nameTotals[device.FriendlyName] > 1)
+            {
+                nameOccurrences.TryGetValue(device.FriendlyName, out var occurrence);
+                occurrence++;
+                nameOccurrences[device.FriendlyName] = occurrence;
+                displayName = $"{device.FriendlyName} (#{occurrence})";
+            }
+
             _hidHideDeviceRows.Add(new HidHideDeviceRow
             {
                 InstanceId = device.InstanceId,
-                FriendlyName = device.FriendlyName,
+                FriendlyName = displayName,
                 IsCloaked = blocked.Contains(device.InstanceId, StringComparer.OrdinalIgnoreCase),
             });
         }
 
         HidHideDevicesEmptyText.Visibility = _hidHideDeviceRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        _hidHideWhitelistRows.Clear();
+        foreach (var path in _hidHideService.WhitelistedApplicationPaths)
+        {
+            _hidHideWhitelistRows.Add(path);
+        }
+
+        HidHideWhitelistEmptyText.Visibility = _hidHideWhitelistRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void BrowseWhitelistAppButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Select an application to whitelist",
+            Filter = "Applications (*.exe)|*.exe|All files (*.*)|*.*",
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            WhitelistAppPathBox.Text = dialog.FileName;
+        }
+    }
+
+    private void AddWhitelistAppButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_hidHideService.IsInstalled)
+        {
+            MessageBox.Show("HidHide is not installed.", "HidHide", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var path = WhitelistAppPathBox.Text.Trim();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        try
+        {
+            _hidHideService.AllowApplication(path);
+            WhitelistAppPathBox.Text = string.Empty;
+            RefreshHidHideStatus();
+            StatusText.Text = $"Whitelisted \"{path}\" with HidHide.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to whitelist this application: {ex.Message}\n\nThis usually requires running 236KO as Administrator.", "HidHide error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RemoveWhitelistAppButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string path } || !_hidHideService.IsInstalled) return;
+
+        try
+        {
+            _hidHideService.RemoveApplication(path);
+            RefreshHidHideStatus();
+            StatusText.Text = $"Removed \"{path}\" from the HidHide whitelist.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to remove this application: {ex.Message}\n\nThis usually requires running 236KO as Administrator.", "HidHide error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void WhitelistSelfHidHideButton_Click(object sender, RoutedEventArgs e)

@@ -20,6 +20,13 @@ public static class HidHideDeviceEnumerator
     private const int SpdrpFriendlyName = 0x0000000C;
     private const int CrSuccess = 0;
 
+    private static readonly DEVPROPKEY DevpkeyDeviceBusReportedDeviceDesc =
+        new(new Guid("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), 4);
+    private static readonly DEVPROPKEY DevpkeyDeviceFriendlyName =
+        new(new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 14);
+    private static readonly DEVPROPKEY DevpkeyDeviceDeviceDesc =
+        new(new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 2);
+
     public static IReadOnlyList<HidHideDeviceInfo> List()
     {
         var results = new List<HidHideDeviceInfo>();
@@ -55,7 +62,8 @@ public static class HidHideDeviceEnumerator
                         var instanceId = GetInstanceId(devInfoData.DevInst);
                         if (!string.IsNullOrEmpty(instanceId))
                         {
-                            var name = GetProperty(deviceInfoSet, ref devInfoData, SpdrpFriendlyName)
+                            var name = GetProductName(devInfoData.DevInst)
+                                       ?? GetProperty(deviceInfoSet, ref devInfoData, SpdrpFriendlyName)
                                        ?? GetProperty(deviceInfoSet, ref devInfoData, SpdrpDeviceDesc)
                                        ?? devicePath;
                             results.Add(new HidHideDeviceInfo(instanceId, name));
@@ -81,6 +89,81 @@ public static class HidHideDeviceEnumerator
         var buffer = new StringBuilder(512);
         var result = CM_Get_Device_ID(devInst, buffer, buffer.Capacity, 0);
         return result == CrSuccess ? buffer.ToString() : null;
+    }
+
+    /// <summary>
+    /// A HID collection's own friendly name/description is usually a generic Windows-assigned
+    /// string like "HID-compliant game controller" or "USB Input Device" — every button/LED/touchpad
+    /// sub-interface on the same physical device gets one of those, indistinguishable from each
+    /// other and unrelated to the product's actual name. The real product string (e.g. "Open Stick
+    /// Community GP2040-CE (D-Input)") is what the device itself reports in its USB descriptors
+    /// (iManufacturer/iProduct) — Windows surfaces that as DEVPKEY_Device_BusReportedDeviceDesc, and
+    /// it usually only lands on a node a level or two up the device tree (the composite/interface
+    /// node), not the leaf HID collection. This is the same property HidHide's own Configuration
+    /// Client GUI reads. Walks up to a few ancestors looking for it, then falls back to the same
+    /// ancestors' regular friendly name/description, and only returns null (falling back further,
+    /// to this device's own name) if nothing usable turns up anywhere in the chain.
+    /// </summary>
+    private static string? GetProductName(uint devInst)
+    {
+        var chain = new List<uint> { devInst };
+        var current = devInst;
+        for (var i = 0; i < 4; i++)
+        {
+            if (CM_Get_Parent(out var parentDevInst, current, 0) != CrSuccess)
+            {
+                break;
+            }
+            chain.Add(parentDevInst);
+            current = parentDevInst;
+        }
+
+        foreach (var node in chain)
+        {
+            var busReported = GetDevNodeStringProperty(node, DevpkeyDeviceBusReportedDeviceDesc);
+            if (!string.IsNullOrEmpty(busReported))
+            {
+                return busReported;
+            }
+        }
+
+        foreach (var node in chain.Skip(1))
+        {
+            var name = GetDevNodeStringProperty(node, DevpkeyDeviceFriendlyName)
+                       ?? GetDevNodeStringProperty(node, DevpkeyDeviceDeviceDesc);
+            if (!string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetDevNodeStringProperty(uint devInst, DEVPROPKEY propertyKey)
+    {
+        uint bufferSize = 0;
+        CM_Get_DevNode_PropertyW(devInst, ref propertyKey, out _, IntPtr.Zero, ref bufferSize, 0);
+        if (bufferSize == 0)
+        {
+            return null;
+        }
+
+        var buffer = Marshal.AllocHGlobal((int)bufferSize);
+        try
+        {
+            if (CM_Get_DevNode_PropertyW(devInst, ref propertyKey, out _, buffer, ref bufferSize, 0) != CrSuccess)
+            {
+                return null;
+            }
+
+            var text = Marshal.PtrToStringUni(buffer, (int)(bufferSize / 2)).TrimEnd('\0');
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     private static string? GetProperty(IntPtr deviceInfoSet, ref SP_DEVINFO_DATA devInfoData, int property)
@@ -112,8 +195,17 @@ public static class HidHideDeviceEnumerator
         public IntPtr Reserved;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct DEVPROPKEY(Guid fmtid, uint pid);
+
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, IntPtr enumerator, IntPtr hwndParent, uint flags);
+
+    [DllImport("cfgmgr32.dll")]
+    private static extern int CM_Get_Parent(out uint pdnDevInst, uint dnDevInst, int ulFlags);
+
+    [DllImport("cfgmgr32.dll")]
+    private static extern int CM_Get_DevNode_PropertyW(uint dnDevInst, ref DEVPROPKEY propertyKey, out uint propertyType, IntPtr propertyBuffer, ref uint propertyBufferSize, uint ulFlags);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData, ref Guid interfaceClassGuid, uint memberIndex, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData);
