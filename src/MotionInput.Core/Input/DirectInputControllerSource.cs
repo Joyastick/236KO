@@ -79,12 +79,10 @@ public sealed class DirectInputControllerSource : IControllerSource
             var pov = state.PointOfViewControllers[i];
             if (pov < 0) continue;
 
-            // Hundredths of a degree, clockwise from up. Treat anything within 67.5 degrees of an
-            // axis as that direction so diagonal hat positions raise both axes (matches a d-pad).
-            if (pov is > 31500 or <= 4500) digital.Add("dpad_up");
-            if (pov is > 4500 and <= 13500) digital.Add("dpad_right");
-            if (pov is > 13500 and <= 22500) digital.Add("dpad_down");
-            if (pov is > 22500 and <= 31500) digital.Add("dpad_left");
+            foreach (var dpadId in HatAngleToDpadIds(pov))
+            {
+                digital.Add(dpadId);
+            }
         }
 
         var analog = new Dictionary<string, float>
@@ -117,6 +115,29 @@ public sealed class DirectInputControllerSource : IControllerSource
         }
 
         return new ControllerSnapshot(DateTime.UtcNow, digital, analog);
+    }
+
+    /// <summary>
+    /// Maps a DirectInput hat-switch angle (hundredths of a degree, clockwise from up, or negative
+    /// for centered/no reading) to the dpad_* id(s) it represents. Each cardinal's bucket is +/-45
+    /// degrees around it, with inclusive bounds on both ends, so a hat's exact diagonal positions
+    /// (4500, 13500, 22500, 31500 — what an 8-way hat switch actually reports, not a continuous
+    /// range) land in both neighboring buckets and raise both axes, matching a d-pad's diagonal
+    /// press. A previous mismatched inclusive/exclusive bound here made every diagonal position
+    /// resolve to only one of its two cardinals — the motion buffer then recorded that single
+    /// (frequently duplicate-with-the-next-sample) cardinal instead of the actual diagonal,
+    /// silently dropping required intermediate steps and making every diagonal-involving motion
+    /// (qcf, qcb, dp, rdp, half-circles — i.e. nearly all of them) fail to match, even though the
+    /// live Held Inputs/Direction readout looked correct at each instant.
+    /// </summary>
+    public static IEnumerable<string> HatAngleToDpadIds(int pov)
+    {
+        if (pov < 0) yield break;
+
+        if (pov is >= 31500 or <= 4500) yield return "dpad_up";
+        if (pov is >= 4500 and <= 13500) yield return "dpad_right";
+        if (pov is >= 13500 and <= 22500) yield return "dpad_down";
+        if (pov is >= 22500 and <= 31500) yield return "dpad_left";
     }
 
     private static float Normalize(int raw) => Math.Clamp((raw - 32767) / 32767f, -1f, 1f);
