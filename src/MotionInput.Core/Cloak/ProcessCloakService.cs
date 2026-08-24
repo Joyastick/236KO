@@ -57,23 +57,35 @@ public sealed class ProcessCloakService : IDisposable
             throw new InvalidOperationException($"No running process with id {targetProcessId}.");
         }
 
-        _configMmf = MemoryMappedFile.CreateNew(ConfigMapName, 4);
-        using (var accessor = _configMmf.CreateViewAccessor(0, 4))
+        // Guaranteed cleanup on ANY failure below, not just the "injection returned 0" case — a
+        // partial failure that left _configMmf/_livenessEvent allocated without disposing them
+        // would block every subsequent Start() with a confusing "file already exists" from
+        // MemoryMappedFile.CreateNew, since the stale handle survives within this process even
+        // though IsActive never got set to true.
+        try
         {
-            accessor.Write(0, xinputUserIndex);
+            _configMmf = MemoryMappedFile.CreateNew(ConfigMapName, 4);
+            using (var accessor = _configMmf.CreateViewAccessor(0, 4))
+            {
+                accessor.Write(0, xinputUserIndex);
+            }
+
+            _livenessEvent = new EventWaitHandle(true, EventResetMode.ManualReset, LivenessEventName);
+
+            _injector = new Injector(target);
+            var handle = _injector.Inject(bootstrapDllPath);
+            if (handle == 0)
+            {
+                throw new InvalidOperationException($"Injection into process {targetProcessId} failed (LoadLibraryW returned 0). The process may be protected (anti-cheat, elevated relative to this app) or already have a conflicting module loaded.");
+            }
+
+            IsActive = true;
         }
-
-        _livenessEvent = new EventWaitHandle(true, EventResetMode.ManualReset, LivenessEventName);
-
-        _injector = new Injector(target);
-        var handle = _injector.Inject(bootstrapDllPath);
-        if (handle == 0)
+        catch
         {
             Stop();
-            throw new InvalidOperationException($"Injection into process {targetProcessId} failed (LoadLibraryW returned 0). The process may be protected (anti-cheat, elevated relative to this app) or already have a conflicting module loaded.");
+            throw;
         }
-
-        IsActive = true;
     }
 
     /// <summary>
