@@ -701,17 +701,15 @@ public partial class MainWindow : Window
 
             // The physical input and the virtual output are separate concerns: a DirectInput
             // controller's "button5" isn't a valid Xbox button name, so it can't just be passed
-            // through the way an XInput controller's own button names conveniently can. Only
-            // default the Output dropdown when the captured id genuinely is one.
-            if (XInputButtonOptions.Any(b => string.Equals(b, detected, StringComparison.OrdinalIgnoreCase)))
+            // through the way an XInput controller's own button names conveniently can. Re-capturing
+            // *what triggers* this role (e.g. re-binding it for a different controller) must not
+            // clobber an already-configured, still-valid Output — only fill in a default when there
+            // wasn't one there yet.
+            if (string.IsNullOrEmpty(row.OutputButton) &&
+                XInputButtonOptions.Any(b => string.Equals(b, detected, StringComparison.OrdinalIgnoreCase)))
             {
                 row.OutputButton = detected.ToLowerInvariant();
                 SetRowValue(_attackOutputRows, row.Role, $"controller:{row.OutputButton}");
-            }
-            else
-            {
-                row.OutputButton = string.Empty;
-                RemoveRowValue(_attackOutputRows, row.Role);
             }
 
             AttackOutputsGrid.Items.Refresh();
