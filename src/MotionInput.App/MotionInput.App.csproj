@@ -4,16 +4,6 @@
     <ProjectReference Include="..\MotionInput.Core\MotionInput.Core.csproj" />
   </ItemGroup>
 
-  <!-- Cloak runtime (CloakBootstrap.dll + MotionInput.Cloak.Payload.dll + their dependencies) —
-       shipped as loose files next to the exe, not bundled into the single-file publish, since
-       ProcessCloakService injects CloakBootstrap.dll by its on-disk path into other processes.
-       ExcludeFromSingleFile is required here: with IncludeNativeLibrariesForSelfExtract set below,
-       the publish pipeline otherwise bundles every native DLL into the exe itself (extracted to a
-       temp dir at runtime, not to a stable on-disk path), which silently broke injection. -->
-  <ItemGroup>
-    <None Include="Cloak\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-  </ItemGroup>
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>

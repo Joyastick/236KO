@@ -5,7 +5,6 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using MotionInput.Core.Cloak;
 using MotionInput.Core.Engine;
 using MotionInput.Core.HidHide;
 using MotionInput.Core.Input;
@@ -28,7 +27,6 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<KeyValueRow> _attackOutputRows = new();
     private readonly ObservableCollection<KeyValueRow> _keyOutputRows = new();
     private readonly ObservableCollection<BindingRow> _bindingRows = new();
-    private readonly ProcessCloakService _cloakService = new();
     private readonly HidHideService _hidHideService = new();
     private readonly ObservableCollection<HidHideDeviceRow> _hidHideDeviceRows = new();
 
@@ -787,128 +785,9 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---------------- Per-Process Cloak ----------------
-
-    private void RefreshCloakTargetsButton_Click(object sender, RoutedEventArgs e)
-    {
-        var xinputControllers = _controllerManager.ListAvailable().Where(c => c.Backend == ControllerBackend.XInput).ToList();
-        CloakControllerCombo.ItemsSource = xinputControllers;
-        if (xinputControllers.Count > 0) CloakControllerCombo.SelectedIndex = 0;
-
-        var processCount = RefreshCloakProcessList();
-
-        StatusText.Text = $"Cloak targets refreshed: {xinputControllers.Count} XInput controller(s), {processCount} candidate process(es).";
-    }
-
-    /// <summary>
-    /// Re-queries running processes just before the dropdown opens, not only on the explicit
-    /// Refresh button — the previous selection can go stale between a refresh and clicking Start
-    /// (e.g. a launcher process handing off to the real game process under a new PID), which
-    /// surfaced as a confusing "No running process with id ..." error at Start time.
-    /// </summary>
-    private void CloakProcessCombo_DropDownOpened(object? sender, EventArgs e) => RefreshCloakProcessList();
-
-    private int RefreshCloakProcessList()
-    {
-        var previouslySelected = (CloakProcessCombo.SelectedItem as CloakTargetProcess)?.Id;
-
-        var selfId = Environment.ProcessId;
-        var processes = Process.GetProcesses()
-            .Where(p => p.Id != selfId && !string.IsNullOrWhiteSpace(SafeMainWindowTitle(p)))
-            .Select(p => new CloakTargetProcess(p.Id, $"{SafeMainWindowTitle(p)} ({p.ProcessName}.exe, PID {p.Id})"))
-            .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        CloakProcessCombo.ItemsSource = processes;
-
-        var stillPresent = previouslySelected is { } id ? processes.FirstOrDefault(p => p.Id == id) : null;
-        if (stillPresent is not null)
-        {
-            CloakProcessCombo.SelectedItem = stillPresent;
-        }
-        else if (processes.Count > 0)
-        {
-            CloakProcessCombo.SelectedIndex = 0;
-        }
-
-        return processes.Count;
-    }
-
-    private static string SafeMainWindowTitle(Process process)
-    {
-        try
-        {
-            return process.MainWindowTitle;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private void StartCloakButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (CloakControllerCombo.SelectedItem is not ControllerDescriptor controller || controller.Backend != ControllerBackend.XInput)
-        {
-            MessageBox.Show("Select an XInput controller to hide. Only XInput controllers can be cloaked this way.", "No controller", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (CloakProcessCombo.SelectedItem is not CloakTargetProcess target)
-        {
-            MessageBox.Show("Select a running process to hide the controller from.", "No process", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var userIndex = int.Parse(controller.Id.Split(':')[1], CultureInfo.InvariantCulture);
-
-        try
-        {
-            _cloakService.Start(target.Id, userIndex);
-            StartCloakButton.IsEnabled = false;
-            StopCloakButton.IsEnabled = true;
-            CloakStatusText.Text = $"Active — hiding {controller.DisplayName} from {target.DisplayName}";
-            CloakStatusDot.Fill = Brushes.LimeGreen;
-            StatusText.Text = "Cloak active.";
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("No running process", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(
-                $"{target.DisplayName} isn't running anymore (its process id changed or it closed). " +
-                "This happens if the list was refreshed before the target relaunched under a new PID — " +
-                "click \"Refresh lists\" and pick it again.",
-                "Process no longer running", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-        catch (Exception ex) when (ex.Message.Contains("last error 5", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(
-                $"Windows denied access to {target.DisplayName} (error 5 = Access Denied). This almost always means " +
-                "that process is running elevated (as Administrator — common for anti-cheat-protected games) while " +
-                "236KO isn't. Close 236KO and relaunch it as Administrator (right-click the exe → Run as administrator), " +
-                "then try again.",
-                "Access denied — try running as Administrator", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Failed to start cloak: {ex.Message}", "Cloak failed", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void StopCloakButton_Click(object sender, RoutedEventArgs e)
-    {
-        _cloakService.Stop();
-        StartCloakButton.IsEnabled = true;
-        StopCloakButton.IsEnabled = false;
-        CloakStatusText.Text = "Inactive";
-        CloakStatusDot.Fill = Brushes.Gray;
-        StatusText.Text = "Cloak stopped; controller visible to that process again.";
-    }
-
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _captureCts?.Cancel();
-        _cloakService.Dispose();
         StopEngine();
     }
-
-    private sealed record CloakTargetProcess(int Id, string DisplayName);
 }

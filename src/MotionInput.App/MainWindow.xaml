@@ -145,36 +145,6 @@
                         </ItemsControl>
                         <TextBlock x:Name="HidHideDevicesEmptyText" Text="Click &quot;Refresh device list&quot; to list connected HID devices." Foreground="Gray" Margin="0,8,0,16"/>
 
-                        <Separator Margin="0,4,0,16"/>
-
-                        <TextBlock Text="Per-Process Cloak (alternate — use if you need to hide from just one specific process instead of everything)" FontWeight="Bold" FontSize="14" Margin="0,0,0,6"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                            Hides one controller from a single, already-running process only — every other process (including
-                            other games, or this app itself) still sees it normally. Works by injecting a small helper into
-                            the target process that reports the controller as disconnected to it specifically. Automatically
-                            stops hiding the moment 236KO closes or crashes — no cleanup step needed.
-                        </TextBlock>
-
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Controller:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <ComboBox Grid.Column="1" x:Name="CloakControllerCombo" DisplayMemberPath="DisplayName" Margin="0,0,10,0"/>
-                            <Button Grid.Column="2" x:Name="RefreshCloakTargetsButton" Content="Refresh lists" Padding="8,2" Click="RefreshCloakTargetsButton_Click"/>
-                        </Grid>
-
-                        <TextBlock Text="Target process (must already be running):" Margin="0,0,0,4"/>
-                        <ComboBox x:Name="CloakProcessCombo" DisplayMemberPath="DisplayName" Margin="0,0,0,10" DropDownOpened="CloakProcessCombo_DropDownOpened"/>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Button x:Name="StartCloakButton" Content="Start Cloak" Padding="10,3" Click="StartCloakButton_Click"/>
-                            <Button x:Name="StopCloakButton" Content="Stop Cloak" Padding="10,3" Margin="8,0,0,0" Click="StopCloakButton_Click" IsEnabled="False"/>
-                            <Ellipse x:Name="CloakStatusDot" Width="12" Height="12" Fill="Gray" Margin="16,0,4,0"/>
-                            <TextBlock x:Name="CloakStatusText" Text="Inactive" VerticalAlignment="Center"/>
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
