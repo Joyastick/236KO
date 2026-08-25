@@ -8,7 +8,7 @@ from the game via HidHide, so only the emulated pad is seen.
 
 ## Download & install
 
-No programming/build tools needed — just the app and its two required drivers.
+No programming/build tools needed - just the app and its two required drivers.
 
 1. Download the latest `236KO-*-win-x64.zip` from [Releases](https://github.com/Joyastick/236KO/releases)
    and extract it anywhere.
