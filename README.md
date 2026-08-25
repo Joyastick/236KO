@@ -5,6 +5,24 @@ numpad-notation motions (`236` = quarter-circle forward, `623` = dragon punch, e
 motion completes with an attack button inside a configurable window — emits a different button
 combination on an emulated Xbox 360 controller. Optionally, it can also hide your real controller
 from the game via HidHide, so only the emulated pad is seen.
+
+## Download & install
+
+No programming/build tools needed — just the app and its two required drivers.
+
+1. Download the latest `236KO-*-win-x64.zip` from [Releases](https://github.com/Joyastick/236KO/releases)
+   and extract it anywhere.
+2. Install [ViGEmBus](https://github.com/ViGEm/ViGEmBus/releases) (creates the virtual controller),
+   rebooting if prompted.
+3. Install [HidHide](https://github.com/nefarius/HidHide/releases) (hides your real controller from
+   the game). Both drivers are required — 236KO checks for them on launch.
+4. Run `236KO.exe`.
+5. Go to the **Bindings** tab and use **Listen** next to each input to bind your controller, picking
+   which virtual Xbox 360 button each one should fire.
+6. (Optional) To hide your real controller from the game, see
+   [Hiding your controller from the game](#hiding-your-controller-from-the-game) below.
+7. Launch 2XKO and test in training mode before a real match.
+
 ## Requirements
 
 - Windows 10/11.
