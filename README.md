@@ -1,7 +1,7 @@
 # 236KO
 
 A fighting-game motion input reader for Windows. It watches a physical controller, recognizes
-numpad-notation motions (`236` = quarter-circle forward, `623` = DP, etc.), and — when a
+numpad-notation motions (`236` = quarter-circle forward, `623` = DP, etc.), and when a
 motion completes with an attack button inside a configurable window — emits a different button
 combination on an emulated Xbox 360 controller. Optionally, it can also hide your real controller
 from the game via HidHide, so only the emulated pad is seen.
