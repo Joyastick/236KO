@@ -27,12 +27,12 @@ No programming/build tools needed — just the app and its two required drivers.
 
 - Windows 10/11.
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) to build/run from source. Not needed to just
-  run a published build — see [Building a standalone .exe](#building-a-standalone-exe).
+  run a published build - see [Building a standalone .exe](#building-a-standalone-exe).
 - [ViGEmBus driver](https://github.com/ViGEm/ViGEmBus/releases) — required for the emulated
   controller output.
-- [HidHide driver](https://github.com/nefarius/HidHide/releases) — optional, only needed if you want
+- [HidHide driver](https://github.com/nefarius/HidHide/releases) - optional, only needed if you want
   to hide your real controller from the game. HidHide only works on a controller running in
-  DirectInput/generic-HID mode — it can't cloak XInput devices, since XInput bypasses the HID class
+  DirectInput/generic-HID mode - it can't cloak XInput devices, since XInput bypasses the HID class
   stack entirely.
 
 Both drivers are checked for at startup; 236KO won't open its main window until both are installed.
@@ -52,7 +52,7 @@ dotnet publish src/MotionInput.App/MotionInput.App.csproj -c Release -r win-x64
 Produces a single self-contained `236KO.exe` (~60 MB, includes the .NET runtime, so the target
 machine doesn't need .NET installed) at
 `src/MotionInput.App/bin/Release/net9.0-windows/win-x64/publish/`. ViGEmBus and HidHide still need
-to be installed separately — those are drivers, not something that can be bundled into the app.
+to be installed separately - those are drivers, not something that can be bundled into the app.
 
 ## Using the app
 
@@ -119,17 +119,17 @@ sample — detection is immediate, not something polled after the fact.
 Profiles are JSON files in a `Profiles/` folder next to the executable, editable either by hand,
 through the Bindings tab's press-to-bind wizard, or through the Profile Editor tab. A profile has:
 
-- `ControllerInput` — which of `dpad`/`left_stick`/`right_stick` feed the direction mapper, stick
+- `ControllerInput`: which of `dpad`/`left_stick`/`right_stick` feed the direction mapper, stick
   deadzone, trigger threshold, poll rate.
-- `Leniency` — the buffer/leniency settings above.
-- `Motions` — ordered list of `{ Name, Sequence: [numpad digits], AllowDiagonalSkip, MaxSequenceMs, MaxGapMs }`.
+- `Leniency`: the buffer/leniency settings above.
+- `Motions`: ordered list of `{ Name, Sequence: [numpad digits], AllowDiagonalSkip, MaxSequenceMs, MaxGapMs }`.
   Order is priority: earlier entries are tried first when more than one motion could match.
-- `AttackBindings` — attack role (e.g. `light`) -> physical input ids that trigger it.
-- `MotionAttackOutputs` — motion name -> attack role -> output tokens, fired when the attack lands
+- `AttackBindings`: attack role (e.g. `light`) -> physical input ids that trigger it.
+- `MotionAttackOutputs`: motion name -> attack role -> output tokens, fired when the attack lands
   inside the motion's attack window.
-- `AttackOutputs` — attack role -> output tokens, held on the virtual pad for as long as the
+- `AttackOutputs`: attack role -> output tokens, held on the virtual pad for as long as the
   physical button is held (as long as that press wasn't already consumed by a combo below).
-- `KeyOutputs` — physical input id -> output tokens, direct passthrough/remap of any other button,
+- `KeyOutputs`: physical input id -> output tokens, direct passthrough/remap of any other button,
   also held for as long as the physical button is held.
 
 `AttackOutputs`, `KeyOutputs`, and `MotionAttackOutputs` are all true passthrough: hold the physical
@@ -151,7 +151,7 @@ Output tokens (used in `MotionAttackOutputs`, `AttackOutputs`, `KeyOutputs`):
 | `$attack` | The controller button the triggering attack role resolves to |
 | anything else | A literal keyboard key name (`shift`, `enter`, `f1`, single letters/digits, …) |
 
-A combo can be written role-first, e.g. `qcf` (`236`) + Light attack outputting `5` + `s1` — force
+A combo can be written role-first, e.g. `qcf` (`236`) + Light attack outputting `5` + `s1` - force
 the d-pad to neutral and press whatever button S1 (bound in the Bindings tab) currently fires. The
 role name is resolved through that role's own `AttackOutputs`, not the raw physical button it was
 captured on, so remapping S1 later automatically updates every combo that references it.
@@ -159,7 +159,7 @@ captured on, so remapping S1 later automatically updates every combo that refere
 Physical input ids read from a controller: `dpad_up/down/left/right`, `a b x y lb rb lt rt start
 back ls rs`, `leftstick_x/y`, `rightstick_x/y`, `lefttrigger`, `righttrigger` for XInput pads;
 DirectInput (non-XInput) pads expose generic `button0..N` plus the same `dpad_*` ids, derived from
-any point-of-view (hat switch) controller the device reports — some browser/tester tools flatten
+any point-of-view (hat switch) controller the device reports - some browser/tester tools flatten
 that hat's angle into an "axis" slot (commonly shown as axis 9) purely as a display convention, but
 it's the same physical hat DirectInput reports, and it's read regardless of which of the device's
 hat slots is the live one. DirectInput pads also expose raw values for every axis/slider/hat the
@@ -172,7 +172,7 @@ moves, if you need to work out a `button<N>` binding for a pad with a non-obviou
 If you don't want the game reacting to both your real controller and the emulated one, install
 [HidHide](https://github.com/nefarius/HidHide/releases) and use the Hide from Game tab:
 
-1. Switch your controller to DirectInput/generic-HID mode (hardware/firmware-dependent — GP2040-CE-
+1. Switch your controller to DirectInput/generic-HID mode (hardware/firmware-dependent - GP2040-CE-
    based controllers and many fightsticks support this). HidHide can't cloak an XInput device.
 2. Click **Refresh device list**, check **Cloak** next to your controller.
 3. Click **Whitelist this app** — 236KO needs to keep reading the real controller even while
@@ -184,12 +184,12 @@ Whitelisting and toggling cloaking both require Administrator the first time you
 
 ## Project layout
 
-- `src/MotionInput.Core` — all logic: input reading, direction mapping, motion buffer/matcher,
+- `src/MotionInput.Core`: all logic: input reading, direction mapping, motion buffer/matcher,
   output resolution/dispatch, ViGEm wrapper, HidHide wrapper, profile model/persistence. No UI
   dependency, fully unit-testable.
-- `src/MotionInput.App` — WPF shell: Bindings wizard, Hide from Game (HidHide) tab, live monitor,
+- `src/MotionInput.App`: WPF shell: Bindings wizard, Hide from Game (HidHide) tab, live monitor,
   profile editor.
-- `src/MotionInput.Tests` — xUnit tests for the direction mapper, motion buffer/matcher, and
+- `src/MotionInput.Tests`: xUnit tests for the direction mapper, motion buffer/matcher, and
   DirectInput hat-switch decoding.
 
 ## Known limitations
