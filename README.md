@@ -28,7 +28,7 @@ No programming/build tools needed - just the app and its two required drivers.
 - Windows 10/11.
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) to build/run from source. Not needed to just
   run a published build - see [Building a standalone .exe](#building-a-standalone-exe).
-- [ViGEmBus driver](https://github.com/ViGEm/ViGEmBus/releases) — required for the emulated
+- [ViGEmBus driver](https://github.com/ViGEm/ViGEmBus/releases) - required for the emulated
   controller output.
 - [HidHide driver](https://github.com/nefarius/HidHide/releases) - optional, only needed if you want
   to hide your real controller from the game. HidHide only works on a controller running in
