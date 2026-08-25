@@ -5,10 +5,6 @@ numpad-notation motions (`236` = quarter-circle forward, `623` = dragon punch, e
 motion completes with an attack button inside a configurable window — emits a different button
 combination on an emulated Xbox 360 controller. Optionally, it can also hide your real controller
 from the game via HidHide, so only the emulated pad is seen.
-
-This is a from-scratch C#/.NET/WPF rewrite of the Python proof-of-concept in the sibling
-`MotionInputs2XKO` repo, built to be more reliable and to have a proper editable-profile UI.
-
 ## Requirements
 
 - Windows 10/11.
@@ -42,17 +38,17 @@ to be installed separately — those are drivers, not something that can be bund
 
 ## Using the app
 
-- **Bindings** — press-to-bind wizard for all 2XKO inputs (directions, Light/Medium/Heavy/S1/S2/Tag/
+- **Bindings**: press-to-bind wizard for all 2XKO inputs (directions, Light/Medium/Heavy/S1/S2/Tag/
   Start/Select/Dash/Break/Parry). Directions set which D-Pad/stick source is used; every other input
   captures whatever physical button you press, and separately lets you pick which virtual Xbox 360
-  button it should fire — the two are independent, since a DirectInput controller's physical button
+  button it should fire - the two are independent, since a DirectInput controller's physical button
   ids (e.g. `button5`) aren't valid Xbox button names and can't just be passed straight through.
-- **Hide from Game** — HidHide cloaking: lists connected HID devices, lets you pick which one(s) to
+- **Hide from Game**: HidHide cloaking: lists connected HID devices, lets you pick which one(s) to
   cloak, toggle cloaking on/off, and manage the whitelist of applications (236KO itself, plus
   anything else you add) that can still see the real controller while everything else can't.
-- **Monitor** — live view of the current direction, held inputs, raw analog/axis values, the
+- **Monitor**: live view of the current direction, held inputs, raw analog/axis values, the
   pending motion/attack window, the last output sent to the virtual pad, and a recognition log.
-- **Profile Editor** — full editable view of everything a profile holds: controller input settings,
+- **Profile Editor**: full editable view of everything a profile holds: controller input settings,
   buffer/leniency timing, the motion list, attack bindings, and the Motion + Attack Outputs table
   (which direction+role combination fires for each recognized motion).
 
@@ -71,24 +67,22 @@ Controller (XInput or DirectInput)
 
 ### Buffer / leniency system
 
-This is a different implementation from the Python version's, though it aims at the same feel:
-
-- **Diagonal-adjacency substitution** — a direction that's one numpad "click" away from what a
+- **Diagonal-adjacency substitution**: a direction that's one numpad "click" away from what a
   motion step requires (e.g. `1` or `3` standing in for `2`) still satisfies that step. This is
   per-motion (`AllowDiagonalSkip`) so you can tighten specific motions if they're getting mis-read.
   It **never applies to a motion's final direction** — that one is always matched exactly. Motions
   that share directions in different orders (`dp` = `[6,2,3]`, `qcf` = `[2,3,6]`) would otherwise
   bleed into each other: `6` is ring-adjacent to `3`, so a fireball roll ending held on `6` would
   satisfy dp's "final ~3" requirement and fire a dragon punch instead of/alongside the fireball.
-- **Max gap** — the longest allowed time between two consecutive required steps. Extra held frames
+- **Max gap**: the longest allowed time between two consecutive required steps. Extra held frames
   or brief neutral blips between steps don't break the motion as long as they fit inside this
   window.
-- **Max sequence time** — the total time budget from the first required step to the last.
-- **Attack window** — after a motion completes, the matcher watches for an attack button for up to
+- **Max sequence time**: the total time budget from the first required step to the last.
+- **Attack window**: after a motion completes, the matcher watches for an attack button for up to
   this long before giving up on combining them.
-- **Cooldown** — the minimum time before the same motion can be recognized again, so one long roll
+- **Cooldown**: the minimum time before the same motion can be recognized again, so one long roll
   through several directions doesn't fire the same special repeatedly.
-- **Sample consumption on match** — once a motion is recognized, the direction samples that made it
+- **Sample consumption on match**: once a motion is recognized, the direction samples that made it
   up are dropped from the buffer (the currently-held direction itself is left alone, so it doesn't
   spuriously re-register as a fresh change). Without this, a motion whose sequence is a suffix of
   another's — dp `[6,2,3]` vs. qcf `[2,3,6]` — could fire twice off the same roll: doing a clean dp
@@ -125,12 +119,6 @@ button, the mapped output stays held on the virtual pad for as long as you hold 
 controller would. For a motion+attack combo, that means the combo's *entire* resolved output (its
 d-pad override included, if it has one) stays held for as long as the triggering attack button does
 — not just its attack-button token. Releasing the attack button releases everything the combo held.
-
-Internally this all comes from one "desired state, diffed each tick" pass per poll — the d-pad
-mirror, plain attack/key passthrough, and active combo outputs are resolved into a single set and
-compared against what's currently held, so nothing ever fights over the same button from two
-different code paths (that used to cause the d-pad to flicker between a combo's forced direction and
-the physically-held one).
 
 Output tokens (used in `MotionAttackOutputs`, `AttackOutputs`, `KeyOutputs`):
 
