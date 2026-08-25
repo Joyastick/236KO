@@ -1,5 +1,7 @@
 # 236KO
 
+<img src="assets/icon.png" alt="236KO icon" width="128"/>
+
 A fighting-game motion input reader for Windows. It watches a physical controller, recognizes
 numpad-notation motions (`236` = quarter-circle forward, `623` = DP, etc.), and when a
 motion completes with an attack button inside a configurable window — emits a different button
